@@ -1,9 +1,14 @@
 import express, { type Express } from "express";
 import cors from "cors";
-import pinoHttp from "pino-http";
 import type { IncomingMessage, ServerResponse } from "http";
 import router from "./routes";
 import { logger } from "./lib/logger";
+
+// pino-http uses `export =` which conflicts with moduleResolution:bundler.
+// Import via the namespace form and cast to callable to satisfy all TS versions.
+import * as pinoHttpNs from "pino-http";
+type PinoHttpFn = (opts: pinoHttpNs.Options) => pinoHttpNs.HttpLogger;
+const pinoHttp = pinoHttpNs as unknown as PinoHttpFn;
 
 const app: Express = express();
 
