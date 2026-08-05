@@ -5,20 +5,13 @@ import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import runtimeErrorOverlay from '@replit/vite-plugin-runtime-error-modal';
 
+// PORT and BASE_PATH are injected by Replit workflows at dev/preview time.
+// During a production build (e.g. Vercel) they are not present — that's fine
+// because Vite only uses them for the dev/preview server, not for building.
 const rawPort = process.env.PORT;
-if (!rawPort) {
-  throw new Error('PORT environment variable is required but was not provided.');
-}
+const port = rawPort ? Number(rawPort) : 3000;
 
-const port = Number(rawPort);
-if (Number.isNaN(port) || port <= 0) {
-  throw new Error(`Invalid PORT value: "${rawPort}"`);
-}
-
-const basePath = process.env.BASE_PATH;
-if (!basePath) {
-  throw new Error('BASE_PATH environment variable is required but was not provided.');
-}
+const basePath = process.env.BASE_PATH ?? '/';
 
 export default defineConfig({
   base: basePath,
@@ -28,7 +21,7 @@ export default defineConfig({
     runtimeErrorOverlay(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'apple-touch-icon.svg', 'icons/*.svg'],
+      includeAssets: ['apple-touch-icon.png', 'icons/*.png'],
       manifest: {
         name: 'Pregnancy Nutrition Tracker',
         short_name: 'PregnancyTracker',
@@ -40,23 +33,23 @@ export default defineConfig({
         scope: '/',
         start_url: '/',
         icons: [
-          { src: '/icons/icon-192.svg', sizes: '192x192', type: 'image/svg+xml' },
-          { src: '/icons/icon-512.svg', sizes: '512x512', type: 'image/svg+xml', purpose: 'any maskable' }
-        ]
+          { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+          { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
+        ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         runtimeCaching: [
-          { 
-            urlPattern: /^https:\/\/fonts\.googleapis\.com\//, 
-            handler: 'CacheFirst', 
-            options: { 
-              cacheName: 'google-fonts-cache', 
-              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 } 
-            } 
-          }
-        ]
-      }
+          {
+            urlPattern: /^https:\/\/fonts\.googleapis\.com\//,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'google-fonts-cache',
+              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
+            },
+          },
+        ],
+      },
     }),
     ...(process.env.NODE_ENV !== 'production' && process.env.REPL_ID !== undefined
       ? [
