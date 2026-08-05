@@ -1,0 +1,733 @@
+Pregnancy Nutrition & Daily Routine Tracker (Production Ready)
+
+You are a senior software engineer, senior UI/UX designer, and senior mobile application architect.
+
+Build a complete production-ready Progressive Web App (PWA) that feels like a premium native iPhone application.
+
+This is NOT a prototype.
+
+Generate a fully working project with clean architecture, reusable components, production-quality code, and no placeholder content.
+
+The project must run immediately after installation without requiring manual fixes.
+
+⸻
+
+Technology Stack
+
+* React
+* TypeScript
+* Vite
+* Tailwind CSS
+* PWA (vite-plugin-pwa)
+* Local Storage
+* React Router
+* Lucide React Icons
+
+No backend.
+
+Everything must work offline after installation.
+
+⸻
+
+Main Goal
+
+Build an elegant pregnancy nutrition and daily routine tracker.
+
+The application should help the user follow healthy eating habits and daily routines through reminders, notifications, progress tracking, and an easy-to-use interface.
+
+⸻
+
+Design
+
+Dark Mode Only
+
+Use colors comfortable for long viewing sessions.
+
+Background:
+#0D1117
+
+Cards:
+#161B22
+
+Primary Accent:
+#4CAF50
+
+Secondary Accent:
+#8BC34A
+
+Success:
+#2ECC71
+
+Warning:
+#F4B400
+
+Text:
+White
+
+Secondary Text:
+Light Gray
+
+Rounded corners
+
+Soft shadows
+
+Premium spacing
+
+Minimal animations
+
+Fast performance
+
+⸻
+
+Mobile First
+
+The entire application must be optimized for iPhone Safari.
+
+Everything must feel like a native iPhone application.
+
+Large touch targets.
+
+Bottom navigation.
+
+One-handed navigation.
+
+No horizontal scrolling.
+
+Responsive on every screen size.
+
+Safe Area support for iPhone.
+
+Support all iPhone notch sizes.
+
+⸻
+
+PWA
+
+Generate:
+
+manifest.json
+
+service worker
+
+Apple Touch Icon
+
+Android Icons
+
+favicon
+
+browserconfig
+
+theme-color
+
+apple-mobile-web-app settings
+
+The application must install correctly from Safari using Add to Home Screen.
+
+After installation it should open in standalone mode without browser controls.
+
+⸻
+
+Home Screen
+
+Display:
+
+Greeting
+
+Today’s Date
+
+Today’s Progress Circle
+
+Daily Completion %
+
+Current Streak
+
+Longest Streak
+
+Next Meal
+
+Countdown Timer
+
+Today’s Habits
+
+Quick Complete Buttons
+
+Motivational Quote
+
+⸻
+
+Weekly Meal Planner
+
+Create:
+
+Monday
+
+Tuesday
+
+Wednesday
+
+Thursday
+
+Friday
+
+Saturday
+
+Sunday
+
+Each day contains:
+
+Breakfast
+
+Morning Snack
+
+Lunch
+
+Afternoon Snack
+
+Dinner
+
+Night Snack
+
+Each meal includes:
+
+Time
+
+Meal Name
+
+Food List
+
+Notes
+
+Reminder
+
+Completion Status
+
+Calories (Optional)
+
+Protein
+
+Healthy Fats
+
+Carbohydrates
+
+⸻
+
+Default Pregnancy Meal Plan
+
+Use the complete weekly meal schedule including fresh Rutab (fresh dates):
+
+Monday
+Breakfast
+2 eggs
+Oatmeal with milk
+Banana
+
+Morning Snack
+3–4 fresh rutab
+Walnuts
+
+Lunch
+Grilled chicken
+Rice
+Broccoli
+
+Afternoon Snack
+Greek yogurt
+
+Dinner
+Salmon
+Sweet potato
+Salad
+
+Night Snack
+Cottage cheese
+
+Tuesday
+Greek yogurt
+Oats
+Berries
+Almonds
+
+Morning Snack
+3–4 rutab
+
+Lunch
+Lean beef
+Potatoes
+Green beans
+
+Afternoon Snack
+Apple with peanut butter
+
+Dinner
+Lentil soup
+Whole-grain bread
+Salad
+
+Night Snack
+Milk
+
+Wednesday
+Cheese and spinach omelet
+
+Morning Snack
+3–4 rutab
+Almonds
+
+Lunch
+Chicken
+Rice
+Vegetables
+
+Afternoon Snack
+Greek yogurt
+
+Dinner
+Salmon
+Potatoes
+Carrots
+
+Night Snack
+Banana
+
+Thursday
+Oatmeal
+Walnuts
+Fruit
+
+Morning Snack
+3–4 rutab
+
+Lunch
+Beef stew
+Potatoes
+
+Afternoon Snack
+Cottage cheese
+
+Dinner
+Chicken
+Rice
+Vegetables
+
+Night Snack
+Kiwi
+
+Friday
+Eggs
+Avocado
+Whole-grain toast
+
+Morning Snack
+3–4 rutab
+Pistachios
+
+Lunch
+Salmon
+Rice
+
+Afternoon Snack
+Greek yogurt
+
+Dinner
+Chicken
+Sweet potato
+Broccoli
+
+Night Snack
+Milk
+
+Saturday
+Greek yogurt
+Oats
+Berries
+
+Morning Snack
+3–4 rutab
+
+Lunch
+Lean beef
+Rice
+Vegetables
+
+Afternoon Snack
+Orange
+Walnuts
+
+Dinner
+Lentils
+Salad
+
+Night Snack
+Cottage cheese
+
+Sunday
+Eggs
+Cheese
+Fruit
+
+Morning Snack
+3–4 rutab
+Almonds
+
+Lunch
+Roast chicken
+Potatoes
+Vegetables
+
+Afternoon Snack
+Greek yogurt
+Berries
+
+Dinner
+Grilled fish
+Rice
+Salad
+
+Night Snack
+Banana
+
+⸻
+
+Meal Management
+
+Allow the user to:
+
+Add Meal
+
+Edit Meal
+
+Delete Meal
+
+Duplicate Meal
+
+Move Meal
+
+Change Meal Time
+
+Change Reminder Time
+
+Enable Reminder
+
+Disable Reminder
+
+Change Foods
+
+Add Notes
+
+Add Calories
+
+Everything must save automatically.
+
+⸻
+
+Habit Management
+
+Default habits:
+
+Drink Water
+
+Breakfast
+
+Morning Snack
+
+Lunch
+
+Afternoon Snack
+
+Dinner
+
+Night Snack
+
+Prenatal Vitamin
+
+Walk
+
+Stretching
+
+Sleep Before 10:30 PM
+
+Allow:
+
+Add
+
+Edit
+
+Delete
+
+Enable
+
+Disable
+
+Reorder
+
+⸻
+
+Notification System
+
+This is one of the most important features.
+
+Each meal has its own notification.
+
+Example:
+
+🍳 Breakfast
+
+7:30 AM
+
+Today’s Meal
+
+• 2 Eggs
+
+• Oatmeal
+
+• Banana
+
+Don’t forget your prenatal vitamin 💚
+
+Lunch:
+
+🍗 Lunch
+
+Today’s Meal
+
+Chicken
+
+Rice
+
+Broccoli
+
+Drink water after eating.
+
+Dinner:
+
+🍽 Dinner
+
+Salmon
+
+Sweet Potato
+
+Salad
+
+Every meal notification must display:
+
+Meal Icon
+
+Meal Name
+
+Meal Time
+
+Foods
+
+Notes
+
+Motivation
+
+When the user taps the notification:
+
+Open that exact meal page.
+
+⸻
+
+Individual Notification Controls
+
+Each meal has its own switch.
+
+Example:
+
+Breakfast
+
+Reminder
+
+ON/OFF
+
+Lunch
+
+Reminder
+
+ON/OFF
+
+Dinner
+
+Reminder
+
+ON/OFF
+
+The user can completely disable reminders for one meal while keeping all others enabled.
+
+Each reminder time is editable.
+
+⸻
+
+Smart Notifications
+
+15 minutes before meal.
+
+At meal time.
+
+30 minutes after if unfinished.
+
+No duplicate notifications.
+
+Daily repeating reminders.
+
+⸻
+
+Notification Settings
+
+Allow:
+
+Enable All
+
+Disable All
+
+Individual Meal Toggle
+
+Custom Time
+
+Sound On/Off
+
+Vibration On/Off (where supported)
+
+Motivational Messages On/Off
+
+Reset Reminder Times
+
+⸻
+
+Progress
+
+Track:
+
+Meals Completed
+
+Habits Completed
+
+Daily %
+
+Weekly %
+
+Monthly %
+
+Current Streak
+
+Longest Streak
+
+Calendar History
+
+⸻
+
+Statistics
+
+Daily Graph
+
+Weekly Graph
+
+Monthly Graph
+
+Completion Heatmap
+
+Meal Completion %
+
+Habit Completion %
+
+⸻
+
+Settings
+
+Export Data
+
+Import Data
+
+Reset Progress
+
+Backup Local Data
+
+Restore Backup
+
+Change Theme Accent Color
+
+Notification Settings
+
+Meal Settings
+
+Habit Settings
+
+⸻
+
+Performance
+
+Lighthouse score above 95.
+
+Fast startup.
+
+Optimized bundle.
+
+Code splitting.
+
+Lazy loading.
+
+No console errors.
+
+No warnings.
+
+No memory leaks.
+
+⸻
+
+Accessibility
+
+Large fonts.
+
+High contrast.
+
+Screen reader support.
+
+Keyboard accessibility.
+
+ARIA labels.
+
+⸻
+
+Code Quality
+
+Use reusable components.
+
+TypeScript everywhere.
+
+Custom hooks.
+
+Clean architecture.
+
+Well-organized folders.
+
+Production-ready code.
+
+⸻
+
+Deployment
+
+The project must be ready to push directly to GitHub.
+
+The project must deploy successfully on Vercel without changing any code.
+
+Include a complete README explaining:
+
+* Installation
+* Development
+* Build
+* GitHub push
+* Vercel deployment
+* PWA installation on iPhone
+* How to enable notifications
+
+The application must work after:
+
+npm install
+
+npm run dev
+
+npm run build
+
+with zero manual fixes.
+
+The final result should feel like a polished App Store-quality health application while remaining a Progressive Web App that is simple to use on iPhone, fast, reliable, and easy to maintain.

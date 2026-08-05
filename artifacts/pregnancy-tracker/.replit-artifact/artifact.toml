@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Pregnancy Nutrition Tracker"
+description = "A production-ready Progressive Web App for pregnancy nutrition and daily routine tracking. Helps pregnant women track meals, habits, hydration, prenatal vitamins, and daily progress. Works fully offline with LocalStorage. No backend required."
+version = "1.0.0"
+id = "artifacts/pregnancy-tracker"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 25325
+
+[services.development]
+run = "pnpm --filter @workspace/pregnancy-tracker run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/pregnancy-tracker", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/pregnancy-tracker/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "25325"
+BASE_PATH = "/"
