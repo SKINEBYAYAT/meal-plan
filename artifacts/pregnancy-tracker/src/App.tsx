@@ -27,20 +27,23 @@ function BottomNav() {
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-[#161B22]/95 backdrop-blur-md border-t border-[#2d3748] z-50 safe-pb">
-      <div className="flex items-center justify-around h-16 px-2">
+    <nav
+      className="fixed bottom-0 left-0 right-0 bg-[#161B22]/95 backdrop-blur-md border-t border-[#2d3748] z-50"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+    >
+      <div className="flex items-center justify-around h-[49px] px-1">
         {navItems.map((item) => {
           const isActive = location === item.href || (item.href !== '/' && location.startsWith(item.href));
           return (
-            <Link key={item.href} href={item.href} className="flex flex-col items-center justify-center w-16 h-full gap-1 tap-highlight-transparent">
-              <item.icon 
+            <Link key={item.href} href={item.href} className="flex flex-col items-center justify-center flex-1 h-full gap-0.5">
+              <item.icon
                 className={cn(
-                  "w-6 h-6 transition-all duration-200", 
-                  isActive ? "text-[#4CAF50] scale-110" : "text-gray-400"
-                )} 
+                  "w-[22px] h-[22px] transition-all duration-200",
+                  isActive ? "text-[#4CAF50]" : "text-gray-400"
+                )}
               />
               <span className={cn(
-                "text-[10px] font-medium transition-colors",
+                "text-[11px] font-medium transition-colors leading-none",
                 isActive ? "text-[#4CAF50]" : "text-gray-400"
               )}>
                 {item.label}
@@ -56,7 +59,7 @@ function BottomNav() {
 function Router() {
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#0D1117]">
-      <main className="flex-1 pb-20 overflow-y-auto overflow-x-hidden safe-pt">
+      <main className="flex-1 overflow-y-auto overflow-x-hidden safe-pt" style={{ paddingBottom: 'calc(49px + env(safe-area-inset-bottom, 0px))' }}>
         <Switch>
           <Route path="/" component={HomePage} />
           <Route path="/meals" component={MealsPage} />
