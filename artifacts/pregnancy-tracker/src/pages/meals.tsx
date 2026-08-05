@@ -1,16 +1,10 @@
 import { useState } from 'react';
 import { format, startOfWeek, addDays, isSameDay } from 'date-fns';
 import { useMeals } from '../hooks/useMeals';
-import { Check, Clock, ChevronRight, Plus, Trash2, Edit2, Copy } from 'lucide-react';
+import { Check, Clock, Plus, Trash2, Edit2, Copy, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Meal } from '../types';
-import { 
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 
@@ -216,106 +210,180 @@ export default function MealsPage() {
         </AnimatePresence>
       </div>
 
-      <Dialog open={!!selectedMeal} onOpenChange={(open) => !open && setSelectedMeal(null)}>
-        <DialogContent className="bg-[#161B22] border-[#2d3748] text-white rounded-t-3xl sm:rounded-3xl p-0 overflow-hidden max-h-[90vh] flex flex-col w-full sm:max-w-md mx-auto mt-auto sm:mt-0 absolute bottom-0 sm:relative data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom-full data-[state=open]:slide-in-from-bottom-full">
-          {selectedMeal && (
-            isEditing ? (
-              <>
-                <div className="p-6 border-b border-[#2d3748] flex justify-between items-center">
-                  <DialogTitle className="text-xl font-bold">{selectedMeal.name ? 'Edit Meal' : 'Add Meal'}</DialogTitle>
-                </div>
-                <div className="p-6 overflow-y-auto space-y-4">
-                  <div>
-                    <label className="text-sm text-gray-400 block mb-1">Name</label>
-                    <Input value={editName} onChange={e => setEditName(e.target.value)} className="bg-[#0D1117] border-[#2d3748]" placeholder="e.g. Breakfast" />
+      {/* Bottom Sheet Overlay */}
+      <AnimatePresence>
+        {selectedMeal && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              key="backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 z-40 bg-black/60"
+              onClick={() => setSelectedMeal(null)}
+            />
+
+            {/* Sheet — always fixed to bottom, never changes position */}
+            <motion.div
+              key="sheet"
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+              className="fixed bottom-0 left-0 right-0 z-50 flex flex-col bg-[#161B22] rounded-t-3xl border-t border-[#2d3748]"
+              style={{
+                maxHeight: 'calc(85dvh - env(safe-area-inset-bottom, 0px))',
+                paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+              }}
+            >
+              {/* Drag handle */}
+              <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
+                <div className="w-10 h-1 rounded-full bg-[#2d3748]" />
+              </div>
+
+              {isEditing ? (
+                <>
+                  {/* Header — fixed, never scrolls */}
+                  <div className="flex items-center justify-between px-6 py-4 border-b border-[#2d3748] flex-shrink-0">
+                    <h2 className="text-xl font-bold text-white">
+                      {selectedMeal.name ? 'Edit Meal' : 'Add Meal'}
+                    </h2>
+                    <button
+                      onClick={() => selectedMeal.name ? setIsEditing(false) : setSelectedMeal(null)}
+                      className="w-8 h-8 rounded-full bg-[#2d3748] flex items-center justify-center"
+                    >
+                      <X className="w-4 h-4 text-gray-300" />
+                    </button>
                   </div>
-                  <div>
-                    <label className="text-sm text-gray-400 block mb-1">Time</label>
-                    <Input type="time" value={editTime} onChange={e => setEditTime(e.target.value)} className="bg-[#0D1117] border-[#2d3748]" />
-                  </div>
-                  <div>
-                    <label className="text-sm text-gray-400 block mb-1">Foods (comma separated)</label>
-                    <Input value={editFoods} onChange={e => setEditFoods(e.target.value)} className="bg-[#0D1117] border-[#2d3748]" placeholder="Eggs, Toast, Milk" />
-                  </div>
-                  <div>
-                    <label className="text-sm text-gray-400 block mb-1">Notes</label>
-                    <Input value={editNotes} onChange={e => setEditNotes(e.target.value)} className="bg-[#0D1117] border-[#2d3748]" placeholder="Optional notes" />
-                  </div>
-                </div>
-                <div className="p-4 border-t border-[#2d3748] bg-[#0D1117] flex gap-2">
-                  <Button variant="outline" className="flex-1 bg-transparent border-[#2d3748]" onClick={() => selectedMeal.name ? setIsEditing(false) : setSelectedMeal(null)}>Cancel</Button>
-                  <Button className="flex-1 bg-[#4CAF50] text-[#0D1117] hover:bg-[#8BC34A]" onClick={saveMeal}>Save</Button>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="p-6 border-b border-[#2d3748] flex justify-between items-start">
-                  <div>
-                    <DialogTitle className="text-2xl font-bold">{selectedMeal.name}</DialogTitle>
-                    <div className="flex items-center gap-2 mt-2 text-[#8BC34A]">
-                      <Clock className="w-4 h-4" />
-                      <span className="font-semibold">{selectedMeal.time}</span>
+
+                  {/* Scrollable form body */}
+                  <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 min-h-0">
+                    <div>
+                      <label className="text-sm text-gray-400 block mb-1">Name</label>
+                      <Input value={editName} onChange={e => setEditName(e.target.value)} className="bg-[#0D1117] border-[#2d3748] text-white" placeholder="e.g. Breakfast" />
+                    </div>
+                    <div>
+                      <label className="text-sm text-gray-400 block mb-1">Time</label>
+                      <Input type="time" value={editTime} onChange={e => setEditTime(e.target.value)} className="bg-[#0D1117] border-[#2d3748] text-white" />
+                    </div>
+                    <div>
+                      <label className="text-sm text-gray-400 block mb-1">Foods (comma separated)</label>
+                      <Input value={editFoods} onChange={e => setEditFoods(e.target.value)} className="bg-[#0D1117] border-[#2d3748] text-white" placeholder="Eggs, Toast, Milk" />
+                    </div>
+                    <div>
+                      <label className="text-sm text-gray-400 block mb-1">Notes</label>
+                      <Input value={editNotes} onChange={e => setEditNotes(e.target.value)} className="bg-[#0D1117] border-[#2d3748] text-white" placeholder="Optional notes" />
                     </div>
                   </div>
-                  <div className="flex gap-2">
-                    <button onClick={() => startEditing(selectedMeal)} className="w-8 h-8 rounded-full bg-[#2d3748] flex items-center justify-center">
-                      <Edit2 className="w-4 h-4 text-gray-300" />
-                    </button>
-                    <button onClick={duplicateMeal} className="w-8 h-8 rounded-full bg-[#2d3748] flex items-center justify-center">
-                      <Copy className="w-4 h-4 text-gray-300" />
-                    </button>
-                    <button onClick={removeMeal} className="w-8 h-8 rounded-full bg-red-500/20 flex items-center justify-center">
-                      <Trash2 className="w-4 h-4 text-red-400" />
+
+                  {/* Footer buttons — fixed, always visible */}
+                  <div className="flex gap-3 px-6 py-4 border-t border-[#2d3748] bg-[#0D1117] flex-shrink-0">
+                    <Button
+                      variant="outline"
+                      className="flex-1 bg-transparent border-[#2d3748] text-white"
+                      onClick={() => selectedMeal.name ? setIsEditing(false) : setSelectedMeal(null)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button className="flex-1 bg-[#4CAF50] text-[#0D1117] hover:bg-[#8BC34A] font-bold" onClick={saveMeal}>
+                      Save
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Header — fixed, never scrolls */}
+                  <div className="flex items-start justify-between px-6 py-4 border-b border-[#2d3748] flex-shrink-0">
+                    <div className="flex-1 min-w-0 pr-3">
+                      <h2 className="text-2xl font-bold text-white truncate">{selectedMeal.name}</h2>
+                      <div className="flex items-center gap-2 mt-1 text-[#8BC34A]">
+                        <Clock className="w-4 h-4 flex-shrink-0" />
+                        <span className="font-semibold">{selectedMeal.time}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <button
+                        data-testid="button-edit-meal"
+                        onClick={() => startEditing(selectedMeal)}
+                        className="w-9 h-9 rounded-full bg-[#2d3748] flex items-center justify-center"
+                      >
+                        <Edit2 className="w-4 h-4 text-gray-300" />
+                      </button>
+                      <button
+                        data-testid="button-duplicate-meal"
+                        onClick={duplicateMeal}
+                        className="w-9 h-9 rounded-full bg-[#2d3748] flex items-center justify-center"
+                      >
+                        <Copy className="w-4 h-4 text-gray-300" />
+                      </button>
+                      <button
+                        data-testid="button-delete-meal"
+                        onClick={removeMeal}
+                        className="w-9 h-9 rounded-full bg-red-500/20 flex items-center justify-center"
+                      >
+                        <Trash2 className="w-4 h-4 text-red-400" />
+                      </button>
+                      <button
+                        onClick={() => setSelectedMeal(null)}
+                        className="w-9 h-9 rounded-full bg-[#2d3748] flex items-center justify-center ml-1"
+                      >
+                        <X className="w-4 h-4 text-gray-300" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Scrollable content */}
+                  <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0">
+                    <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Foods</h4>
+                    {selectedMeal.foods.length > 0 ? (
+                      <ul className="space-y-2 mb-5">
+                        {selectedMeal.foods.map((food, idx) => (
+                          <li key={idx} className="bg-[#0D1117] px-4 py-3 rounded-xl border border-[#2d3748] flex items-center gap-3">
+                            <div className="w-2 h-2 rounded-full bg-[#4CAF50] flex-shrink-0" />
+                            <span className="text-gray-200 text-sm">{food}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-gray-500 text-sm mb-5">No foods added yet.</p>
+                    )}
+
+                    {selectedMeal.notes && (
+                      <>
+                        <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Notes</h4>
+                        <p className="bg-[#0D1117] px-4 py-3 rounded-xl border border-[#2d3748] text-sm text-gray-300 leading-relaxed">
+                          {selectedMeal.notes}
+                        </p>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Footer CTA — fixed, always visible */}
+                  <div className="px-6 py-4 border-t border-[#2d3748] bg-[#0D1117] flex-shrink-0">
+                    <button
+                      data-testid="button-toggle-meal-completed"
+                      onClick={() => {
+                        toggleMealCompleted(selectedMeal.id, !selectedMeal.completed);
+                        setSelectedMeal(null);
+                      }}
+                      className={cn(
+                        "w-full py-4 rounded-xl font-bold text-base transition-all active:scale-[0.98]",
+                        selectedMeal.completed
+                          ? "bg-[#2d3748] text-white"
+                          : "bg-[#4CAF50] text-[#0D1117] shadow-[0_4px_14px_rgba(76,175,80,0.3)]"
+                      )}
+                    >
+                      {selectedMeal.completed ? 'Mark as Incomplete' : 'Mark as Completed'}
                     </button>
                   </div>
-                </div>
-                
-                <div className="p-6 overflow-y-auto">
-                  <h4 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Foods</h4>
-                  {selectedMeal.foods.length > 0 ? (
-                    <ul className="space-y-3 mb-6">
-                      {selectedMeal.foods.map((food, idx) => (
-                        <li key={idx} className="bg-[#0D1117] p-3 rounded-xl border border-[#2d3748] flex items-center gap-3">
-                          <div className="w-2 h-2 rounded-full bg-[#4CAF50]" />
-                          <span>{food}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-gray-500 mb-6">No foods added.</p>
-                  )}
-
-                  {selectedMeal.notes && (
-                    <>
-                      <h4 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Notes</h4>
-                      <p className="bg-[#0D1117] p-4 rounded-xl border border-[#2d3748] text-sm text-gray-300 leading-relaxed mb-6">
-                        {selectedMeal.notes}
-                      </p>
-                    </>
-                  )}
-                </div>
-                
-                <div className="p-4 border-t border-[#2d3748] bg-[#0D1117]">
-                  <button 
-                    onClick={() => {
-                      toggleMealCompleted(selectedMeal.id, !selectedMeal.completed);
-                      setSelectedMeal(null);
-                    }}
-                    className={cn(
-                      "w-full py-4 rounded-xl font-bold transition-all active:scale-[0.98]",
-                      selectedMeal.completed 
-                        ? "bg-[#2d3748] text-white"
-                        : "bg-[#4CAF50] text-[#0D1117] shadow-[0_4px_14px_rgba(76,175,80,0.3)]"
-                    )}
-                  >
-                    {selectedMeal.completed ? 'Mark as Incomplete' : 'Mark as Completed'}
-                  </button>
-                </div>
-              </>
-            )
-          )}
-        </DialogContent>
-      </Dialog>
+                </>
+              )}
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
