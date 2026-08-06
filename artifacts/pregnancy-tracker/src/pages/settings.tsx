@@ -1,9 +1,10 @@
 import { useSettings } from '../hooks/useSettings';
 import { useNotifications } from '../hooks/useNotifications';
+import { requestNotificationPermission } from '../firebase';
 import { Bell, User, Heart, Download, Upload, Trash2, ChevronRight, Bug } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -14,6 +15,7 @@ export default function SettingsPage() {
   const { settings, updateSettings } = useSettings();
   const { permission, isSupported, requestPermission } = useNotifications();
   const [name, setName] = useState(settings.userName);
+  const [fcmLoading, setFcmLoading] = useState(false);
   const { toast } = useToast();
 
   const handleNameSave = () => {
@@ -78,6 +80,18 @@ export default function SettingsPage() {
       updateSettings({ notificationsEnabled: checked });
     }
   };
+
+  const handleEnableReminders = useCallback(async () => {
+    setFcmLoading(true);
+    const token = await requestNotificationPermission();
+    console.log('[Settings] FCM token result:', token);
+    setFcmLoading(false);
+    if (token) {
+      toast({ title: 'Reminders enabled 🔔', description: 'FCM token logged to console.' });
+    } else {
+      toast({ title: 'Could not enable reminders', description: 'Check the console for details.', variant: 'destructive' });
+    }
+  }, [toast]);
 
   const permissionLabel =
     permission === 'granted' ? 'Granted ✓' :
@@ -156,6 +170,21 @@ export default function SettingsPage() {
                 onCheckedChange={(checked) => updateSettings({ motivationalMessages: checked })}
                 className="data-[state=checked]:bg-[#4CAF50]"
               />
+            </div>
+
+            {/* Enable Reminders via FCM */}
+            <div className="flex items-center justify-between p-4">
+              <div>
+                <div className="font-medium">Enable Reminders</div>
+                <div className="text-sm text-gray-400 mt-0.5">Register for push notifications</div>
+              </div>
+              <Button
+                onClick={handleEnableReminders}
+                disabled={fcmLoading}
+                className="h-9 px-4 text-sm bg-[#4CAF50] text-[#0D1117] hover:bg-[#66BB6A] disabled:opacity-50"
+              >
+                {fcmLoading ? 'Requesting…' : 'Enable'}
+              </Button>
             </div>
 
             {/* Link to debug page */}
