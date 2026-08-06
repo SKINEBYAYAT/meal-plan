@@ -4,11 +4,14 @@ import type { IncomingMessage, ServerResponse } from "http";
 import router from "./routes";
 import { logger } from "./lib/logger";
 
-// pino-http uses `export =` which conflicts with moduleResolution:bundler.
-// Import via the namespace form and cast to callable to satisfy all TS versions.
+// pino-http publishes a CJS `module.exports = fn` export.
+// esbuild (used to bundle this server) wraps it so the callable lives on `.default`.
+// We fall back to the namespace itself in case the bundler skips the interop wrapper.
 import * as pinoHttpNs from "pino-http";
 type PinoHttpFn = (opts: pinoHttpNs.Options) => pinoHttpNs.HttpLogger;
-const pinoHttp = pinoHttpNs as unknown as PinoHttpFn;
+const pinoHttp: PinoHttpFn =
+  (pinoHttpNs as unknown as { default?: PinoHttpFn }).default ??
+  (pinoHttpNs as unknown as PinoHttpFn);
 
 const app: Express = express();
 
