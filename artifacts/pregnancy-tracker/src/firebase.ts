@@ -10,9 +10,8 @@ const firebaseConfig = {
   appId: "1:471128219169:web:4c6747730ff3d6f7c40d60",
 };
 
-// TODO: Replace with your VAPID key from Firebase Console →
-//       Project Settings → Cloud Messaging → Web Push certificates
-const VAPID_KEY = '';
+const VAPID_KEY = 'BAZFsFhWDAnDyY0nHU0Jkp1DaK112_DEesqjQ4B5fN8MFNp7vcWtqdU9Na3wSRzKdQW6RJLv-_L66kjhizTjfGc';
+
 
 const app = initializeApp(firebaseConfig);
 const messaging = getMessaging(app);
@@ -29,9 +28,10 @@ export async function requestNotificationPermission() {
       return null;
     }
 
+    const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
     const token = await getToken(messaging, {
-      vapidKey: VAPID_KEY || undefined,
-      serviceWorkerRegistration: await navigator.serviceWorker.ready,
+      vapidKey: VAPID_KEY,
+      serviceWorkerRegistration: registration,
     });
 
     if (token) {
