@@ -1,42 +1,89 @@
-import { useState, useEffect } from 'react';
-import { Meal } from '../types';
+import { useState, useEffect, useCallback } from 'react';
+import { notificationScheduler } from '../lib/notifications';
+import { Meal, NotificationDebugInfo } from '../types';
 
 export function useNotifications() {
   const [permission, setPermission] = useState<NotificationPermission>('default');
+  const [swStatus, setSwStatus] = useState<string>('checking');
+  const [isSupported, setIsSupported] = useState(false);
 
+  // Initialise on mount
   useEffect(() => {
-    if ('Notification' in window) {
+    const supported = 'Notification' in window && 'serviceWorker' in navigator;
+    setIsSupported(supported);
+    if (supported) {
       setPermission(Notification.permission);
     }
+    notificationScheduler.init().then(() => {
+      setSwStatus(notificationScheduler.swStatus);
+    });
   }, []);
 
-  const requestPermission = async () => {
+  /**
+   * Request browser notification permission.
+   * Only call this in response to a deliberate user action.
+   * Returns true if granted.
+   */
+  const requestPermission = useCallback(async (): Promise<boolean> => {
     if (!('Notification' in window)) return false;
     const perm = await Notification.requestPermission();
     setPermission(perm);
-    return perm === 'granted';
-  };
-
-  const scheduleMealNotification = (meal: Meal) => {
-    if (permission !== 'granted' || !meal.reminderEnabled) return;
-
-    const [hours, minutes] = meal.reminderTime.split(':').map(Number);
-    const target = new Date();
-    target.setHours(hours, minutes, 0, 0);
-    
-    const now = new Date();
-    const delay = target.getTime() - now.getTime();
-    
-    // Only schedule if it's in the future and today
-    if (delay > 0) {
-      setTimeout(() => {
-        new Notification(meal.name, {
-          body: meal.foods.join(' • ') + '\nTime for a nourishing meal!',
-          icon: '/icons/icon-192.svg'
-        });
-      }, delay);
+    if (perm === 'granted') {
+      await notificationScheduler.init();
+      setSwStatus(notificationScheduler.swStatus);
     }
-  };
+    return perm === 'granted';
+  }, []);
 
-  return { permission, requestPermission, scheduleMealNotification };
+  /**
+   * Schedule all reminder-enabled meals for a given date.
+   * Cancels any previously scheduled timers first.
+   */
+  const scheduleAll = useCallback((meals: Meal[], date: string): void => {
+    if (Notification.permission !== 'granted') return;
+    notificationScheduler.scheduleAll(meals, date);
+  }, []);
+
+  /**
+   * Schedule (or re-schedule) a single meal's reminders.
+   */
+  const scheduleMeal = useCallback((meal: Meal, date: string): void => {
+    if (Notification.permission !== 'granted') return;
+    notificationScheduler.scheduleMeal(meal, date);
+  }, []);
+
+  /**
+   * Cancel reminders for a specific meal (use on delete or toggle-off).
+   */
+  const cancelMeal = useCallback((mealId: string): void => {
+    notificationScheduler.cancelMeal(mealId);
+  }, []);
+
+  /** Cancel every scheduled timer. */
+  const cancelAll = useCallback((): void => {
+    notificationScheduler.cancelAll();
+  }, []);
+
+  /** Fire a test notification immediately (requires granted permission). */
+  const sendTestNotification = useCallback(async (): Promise<void> => {
+    await notificationScheduler.sendTestNotification();
+  }, []);
+
+  /** Get a snapshot of the scheduler state for the debug page. */
+  const getDebugInfo = useCallback((): NotificationDebugInfo => {
+    return notificationScheduler.getDebugInfo();
+  }, []);
+
+  return {
+    permission,
+    swStatus,
+    isSupported,
+    requestPermission,
+    scheduleAll,
+    scheduleMeal,
+    cancelMeal,
+    cancelAll,
+    sendTestNotification,
+    getDebugInfo,
+  };
 }

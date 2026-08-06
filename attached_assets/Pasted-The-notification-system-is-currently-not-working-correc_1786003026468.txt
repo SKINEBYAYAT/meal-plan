@@ -1,0 +1,311 @@
+The notification system is currently not working correctly. I want you to completely redesign and implement a production-ready notification system for my Pregnancy Nutrition Tracker PWA.
+
+IMPORTANT:
+This app will be hosted on GitHub and Vercel and installed on iPhone using "Add to Home Screen". The notification system must be designed to work correctly for an installed PWA where browser support allows it.
+
+==========================
+MAIN REQUIREMENTS
+==========================
+
+Implement a complete notification engine.
+
+Notifications must work for:
+
+• Breakfast
+• Morning Snack
+• Lunch
+• Afternoon Snack
+• Dinner
+• Night Snack
+• Every custom meal that I create later
+
+Notifications should be scheduled automatically.
+
+No manual setup should be required after creating a meal.
+
+==========================
+PERMISSION
+==========================
+
+Request notification permission ONLY after the user enables reminders.
+
+Never ask permission on first launch.
+
+If permission is denied:
+
+Display a helpful message explaining how to enable notifications again.
+
+==========================
+MEAL NOTIFICATIONS
+==========================
+
+Each meal has:
+
+• Reminder ON/OFF switch
+• Reminder Time
+• Notification Message
+• Meal Icon
+
+Example:
+
+🍳 Breakfast
+
+Today's Meal
+
+• 2 Eggs
+• Oatmeal
+• Banana
+
+Don't forget your prenatal vitamin 💚
+
+Lunch example:
+
+🍗 Lunch
+
+Today's Meal
+
+• Chicken
+• Rice
+• Broccoli
+
+Drink water after eating.
+
+Dinner example:
+
+🍽 Dinner
+
+Today's Meal
+
+• Salmon
+• Sweet Potato
+• Salad
+
+==========================
+CUSTOM MEALS
+==========================
+
+When I create a new meal:
+
+Automatically allow:
+
+• Custom reminder time
+• Reminder ON/OFF
+• Notification message
+• Icon
+
+When I edit the meal:
+
+Cancel the old notification.
+
+Schedule the new notification.
+
+When I delete a meal:
+
+Delete its notification.
+
+Everything must happen automatically.
+
+==========================
+REMINDER SETTINGS
+==========================
+
+Every meal has independent settings.
+
+Example:
+
+Breakfast
+Reminder ON
+
+Lunch
+Reminder OFF
+
+Dinner
+Reminder ON
+
+Changing one reminder must never affect another meal.
+
+==========================
+SMART SCHEDULING
+==========================
+
+Schedule notifications:
+
+15 minutes before meal
+
+Exactly at meal time
+
+30 minutes later if meal is not completed
+
+Never create duplicate notifications.
+
+Automatically reschedule reminders every new day.
+
+If reminder time changes:
+
+Delete previous reminder.
+
+Create new reminder.
+
+==========================
+NOTIFICATION CONTENT
+==========================
+
+Every notification should include:
+
+Meal Icon
+
+Meal Name
+
+Meal Time
+
+Foods
+
+Notes
+
+Motivational message
+
+==========================
+WHEN USER TAPS NOTIFICATION
+==========================
+
+Open the application.
+
+Navigate directly to that meal.
+
+Highlight the meal.
+
+Allow immediate completion.
+
+==========================
+DEBUG PAGE
+==========================
+
+Create a Notification Debug page.
+
+Show:
+
+Notification Permission
+
+Service Worker Status
+
+Notification Support
+
+Scheduled Reminder Count
+
+Upcoming Reminder
+
+Last Reminder
+
+Last Notification
+
+Errors
+
+Add buttons:
+
+Send Test Notification
+
+Reschedule All Notifications
+
+Clear All Notifications
+
+Refresh Notification Status
+
+==========================
+LOCAL STORAGE
+==========================
+
+Store:
+
+Meal reminder enabled
+
+Reminder time
+
+Custom meals
+
+Notification preferences
+
+Last scheduled reminders
+
+Everything must persist after refreshing.
+
+==========================
+PWA REQUIREMENTS
+==========================
+
+Use:
+
+Notifications API
+
+Service Worker
+
+Manifest
+
+Correct Service Worker registration
+
+Correct notification registration
+
+Correct lifecycle handling
+
+Correct cleanup
+
+The application must remain fully functional offline.
+
+==========================
+IPHONE SUPPORT
+==========================
+
+Optimize specifically for installed PWAs on iPhone.
+
+Ensure notification permission is requested correctly.
+
+Ensure notifications are compatible with Safari Home Screen installation where supported.
+
+==========================
+QUALITY
+==========================
+
+No notification duplicates.
+
+No console errors.
+
+No memory leaks.
+
+No missing permissions.
+
+No broken Service Worker.
+
+No failed notification registration.
+
+No failed reminder scheduling.
+
+No TypeScript errors.
+
+No ESLint warnings.
+
+==========================
+FINAL VERIFICATION
+==========================
+
+Before finishing:
+
+✓ Notifications work for all default meals.
+
+✓ Notifications work for every custom meal.
+
+✓ Editing meal time updates notifications.
+
+✓ Deleting meals removes notifications.
+
+✓ Notification settings persist after refresh.
+
+✓ Test Notification works.
+
+✓ Service Worker registers successfully.
+
+✓ Project builds successfully.
+
+✓ Project is ready for GitHub.
+
+✓ Project is ready for Vercel.
+
+Do not leave placeholders or unfinished code. Implement a complete, production-ready notification system that works automatically for all current and future meals.

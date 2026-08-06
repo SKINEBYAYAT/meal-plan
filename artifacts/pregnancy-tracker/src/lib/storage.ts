@@ -5,6 +5,7 @@ export const HABITS_KEY = 'pregnancy_tracker_habits';
 export const HABIT_LOGS_KEY = 'pregnancy_tracker_habit_logs';
 export const SETTINGS_KEY = 'pregnancy_tracker_settings';
 export const STREAKS_KEY = 'pregnancy_tracker_streaks';
+export const NOTIFICATIONS_KEY = 'pregnancy_tracker_notifications';
 
 export function getFromStorage<T>(key: string, defaultValue: T): T {
   try {
@@ -25,3 +26,6 @@ export function setToStorage<T>(key: string, value: T): void {
     console.error(`Error writing ${key} to localStorage`, e);
   }
 }
+
+// Re-export types to satisfy import consumers
+export type { DayPlan, HabitDefinition, HabitLog, AppSettings, StreakData };

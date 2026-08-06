@@ -1,23 +1,24 @@
 import { useSettings } from '../hooks/useSettings';
 import { useNotifications } from '../hooks/useNotifications';
-import { Bell, User, Heart, Palette, Download, Upload, Trash2, Info } from 'lucide-react';
+import { Bell, User, Heart, Download, Upload, Trash2, ChevronRight, Bug } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
+import { Link } from 'wouter';
 import { MEALS_KEY, HABITS_KEY, HABIT_LOGS_KEY, STREAKS_KEY, SETTINGS_KEY } from '../lib/storage';
 
 export default function SettingsPage() {
   const { settings, updateSettings } = useSettings();
-  const { permission, requestPermission } = useNotifications();
+  const { permission, isSupported, requestPermission } = useNotifications();
   const [name, setName] = useState(settings.userName);
   const { toast } = useToast();
 
   const handleNameSave = () => {
     updateSettings({ userName: name });
-    toast({ title: "Profile updated", description: "Your name has been saved." });
+    toast({ title: 'Profile updated', description: 'Your name has been saved.' });
   };
 
   const exportData = () => {
@@ -40,19 +41,18 @@ export default function SettingsPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = (ev) => {
       try {
-        const data = JSON.parse(e.target?.result as string);
+        const data = JSON.parse(ev.target?.result as string);
         if (data.meals) localStorage.setItem(MEALS_KEY, data.meals);
         if (data.habits) localStorage.setItem(HABITS_KEY, data.habits);
         if (data.logs) localStorage.setItem(HABIT_LOGS_KEY, data.logs);
         if (data.streaks) localStorage.setItem(STREAKS_KEY, data.streaks);
         if (data.settings) localStorage.setItem(SETTINGS_KEY, data.settings);
-        
-        toast({ title: "Data imported", description: "Your data has been restored successfully. Please refresh the app." });
+        toast({ title: 'Data imported', description: 'Your data has been restored. Refreshing…' });
         setTimeout(() => window.location.reload(), 1500);
-      } catch (err) {
-        toast({ title: "Import failed", description: "Invalid backup file.", variant: "destructive" });
+      } catch {
+        toast({ title: 'Import failed', description: 'Invalid backup file.', variant: 'destructive' });
       }
     };
     reader.readAsText(file);
@@ -63,13 +63,26 @@ export default function SettingsPage() {
       const granted = await requestPermission();
       if (granted) {
         updateSettings({ notificationsEnabled: true });
+        toast({ title: 'Notifications enabled 🔔', description: 'Turn on reminders per meal in the Meals tab.' });
       } else {
-        toast({ title: "Permission denied", description: "Please enable notifications in your browser settings.", variant: "destructive" });
+        toast({
+          title: 'Permission denied',
+          description:
+            permission === 'denied'
+              ? 'Go to iOS Settings → Safari → Notifications to re-enable.'
+              : 'Please allow notifications when prompted.',
+          variant: 'destructive',
+        });
       }
     } else {
       updateSettings({ notificationsEnabled: checked });
     }
   };
+
+  const permissionLabel =
+    permission === 'granted' ? 'Granted ✓' :
+    permission === 'denied'  ? 'Denied — change in Settings' :
+    'Not requested';
 
   return (
     <div className="flex flex-col h-full">
@@ -78,7 +91,7 @@ export default function SettingsPage() {
       </div>
 
       <div className="p-4 space-y-8 flex-1">
-        
+
         {/* Profile */}
         <section>
           <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
@@ -88,14 +101,76 @@ export default function SettingsPage() {
             <div>
               <label className="text-sm text-gray-400 block mb-1">Your Name</label>
               <div className="flex gap-2">
-                <Input 
-                  value={name} 
-                  onChange={e => setName(e.target.value)} 
+                <Input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
                   className="bg-[#0D1117] border-[#2d3748] h-11"
                 />
-                <Button onClick={handleNameSave} className="h-11 bg-[#2d3748] text-white hover:bg-[#4CAF50] hover:text-[#0D1117]">Save</Button>
+                <Button
+                  onClick={handleNameSave}
+                  className="h-11 bg-[#2d3748] text-white hover:bg-[#4CAF50] hover:text-[#0D1117]"
+                >
+                  Save
+                </Button>
               </div>
             </div>
+          </div>
+        </section>
+
+        {/* Notifications */}
+        <section>
+          <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+            <Bell className="w-4 h-4" /> Notifications
+          </h2>
+          <div className="bg-[#161B22] border border-[#2d3748] rounded-2xl divide-y divide-[#2d3748]">
+            <div className="flex items-center justify-between p-4">
+              <div>
+                <div className="font-medium">Meal Reminders</div>
+                <div className="text-sm text-gray-400 mt-0.5">
+                  {isSupported ? permissionLabel : 'Not supported in this browser'}
+                </div>
+              </div>
+              <Switch
+                checked={settings.notificationsEnabled && permission === 'granted'}
+                onCheckedChange={handleNotificationToggle}
+                disabled={!isSupported}
+                className="data-[state=checked]:bg-[#4CAF50]"
+              />
+            </div>
+
+            {permission === 'denied' && (
+              <div className="px-4 py-3 bg-amber-500/5">
+                <p className="text-xs text-amber-400 leading-relaxed">
+                  Notifications are blocked. On iPhone: <strong>Settings → Safari → Notifications</strong> → enable for this site.
+                </p>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between p-4">
+              <div>
+                <div className="font-medium">Motivational Quotes</div>
+                <div className="text-sm text-gray-400 mt-0.5">Show daily inspiration on home</div>
+              </div>
+              <Switch
+                checked={settings.motivationalMessages}
+                onCheckedChange={(checked) => updateSettings({ motivationalMessages: checked })}
+                className="data-[state=checked]:bg-[#4CAF50]"
+              />
+            </div>
+
+            {/* Link to debug page */}
+            <Link href="/notifications-debug">
+              <div className="flex items-center gap-3 p-4 hover:bg-[#2d3748]/50 transition-colors cursor-pointer">
+                <div className="w-8 h-8 rounded-full bg-[#0D1117] flex items-center justify-center">
+                  <Bug className="w-4 h-4 text-gray-400" />
+                </div>
+                <div className="flex-1">
+                  <div className="font-medium text-sm">Notification Debug</div>
+                  <div className="text-xs text-gray-400">Status, test, and reschedule</div>
+                </div>
+                <ChevronRight className="w-4 h-4 text-gray-500" />
+              </div>
+            </Link>
           </div>
         </section>
 
@@ -104,30 +179,9 @@ export default function SettingsPage() {
           <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
             <Heart className="w-4 h-4" /> Preferences
           </h2>
-          <div className="bg-[#161B22] border border-[#2d3748] rounded-2xl divide-y divide-[#2d3748]">
-            <div className="flex items-center justify-between p-4">
-              <div>
-                <div className="font-medium">Meal Reminders</div>
-                <div className="text-sm text-gray-400 mt-0.5">Get notified for upcoming meals</div>
-              </div>
-              <Switch 
-                checked={settings.notificationsEnabled} 
-                onCheckedChange={handleNotificationToggle} 
-                className="data-[state=checked]:bg-[#4CAF50]"
-              />
-            </div>
-            
-            <div className="flex items-center justify-between p-4">
-              <div>
-                <div className="font-medium">Motivational Quotes</div>
-                <div className="text-sm text-gray-400 mt-0.5">Show daily inspiration on home</div>
-              </div>
-              <Switch 
-                checked={settings.motivationalMessages} 
-                onCheckedChange={(checked) => updateSettings({ motivationalMessages: checked })} 
-                className="data-[state=checked]:bg-[#4CAF50]"
-              />
-            </div>
+          <div className={cn('bg-[#161B22] border border-[#2d3748] rounded-2xl divide-y divide-[#2d3748]')}>
+            {/* placeholder for future preferences */}
+            <div className="p-4 text-sm text-gray-500 text-center">More options coming soon</div>
           </div>
         </section>
 
@@ -137,7 +191,10 @@ export default function SettingsPage() {
             <Upload className="w-4 h-4" /> Data & Backup
           </h2>
           <div className="bg-[#161B22] border border-[#2d3748] rounded-2xl divide-y divide-[#2d3748]">
-            <button onClick={exportData} className="w-full flex items-center gap-3 p-4 text-left hover:bg-[#2d3748]/50 transition-colors">
+            <button
+              onClick={exportData}
+              className="w-full flex items-center gap-3 p-4 text-left hover:bg-[#2d3748]/50 transition-colors"
+            >
               <div className="w-8 h-8 rounded-full bg-[#0D1117] flex items-center justify-center">
                 <Download className="w-4 h-4 text-[#8BC34A]" />
               </div>
@@ -146,7 +203,7 @@ export default function SettingsPage() {
                 <div className="text-xs text-gray-400">Save your data to a file</div>
               </div>
             </button>
-            
+
             <label className="w-full flex items-center gap-3 p-4 text-left hover:bg-[#2d3748]/50 transition-colors cursor-pointer">
               <div className="w-8 h-8 rounded-full bg-[#0D1117] flex items-center justify-center">
                 <Upload className="w-4 h-4 text-blue-400" />
@@ -157,18 +214,37 @@ export default function SettingsPage() {
               </div>
               <input type="file" accept=".json" className="hidden" onChange={importData} />
             </label>
+
+            <button
+              onClick={() => {
+                if (confirm('Delete all data? This cannot be undone.')) {
+                  [MEALS_KEY, HABITS_KEY, HABIT_LOGS_KEY, STREAKS_KEY, SETTINGS_KEY].forEach((k) =>
+                    localStorage.removeItem(k),
+                  );
+                  window.location.reload();
+                }
+              }}
+              className="w-full flex items-center gap-3 p-4 text-left hover:bg-red-500/10 transition-colors"
+            >
+              <div className="w-8 h-8 rounded-full bg-[#0D1117] flex items-center justify-center">
+                <Trash2 className="w-4 h-4 text-red-400" />
+              </div>
+              <div>
+                <div className="font-medium text-red-400">Clear All Data</div>
+                <div className="text-xs text-gray-400">Permanently delete everything</div>
+              </div>
+            </button>
           </div>
         </section>
-        
-        {/* Info */}
+
+        {/* Footer */}
         <div className="pt-8 pb-4 text-center text-gray-500 text-sm flex flex-col items-center">
           <div className="w-12 h-12 rounded-full bg-[#4CAF50] flex items-center justify-center mb-3">
-             <Heart className="w-6 h-6 text-[#0D1117] fill-[#0D1117]" />
+            <Heart className="w-6 h-6 text-[#0D1117] fill-[#0D1117]" />
           </div>
-          <p className="font-bold text-gray-300">PregnancyTracker v1.0.0</p>
+          <p className="font-bold text-gray-300">PregnancyTracker v1.1.0</p>
           <p className="mt-1">All data is stored securely on your device.</p>
         </div>
-
       </div>
     </div>
   );

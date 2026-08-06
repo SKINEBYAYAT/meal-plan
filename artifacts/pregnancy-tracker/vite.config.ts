@@ -21,7 +21,16 @@ export default defineConfig({
     runtimeErrorOverlay(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['apple-touch-icon.png', 'icons/*.png'],
+
+      // ── injectManifest: we own the service worker source ──────────────────
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
+
+      injectManifest: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+      },
+
       manifest: {
         name: 'Pregnancy Nutrition Tracker',
         short_name: 'PregnancyTracker',
@@ -34,21 +43,19 @@ export default defineConfig({
         start_url: '/',
         icons: [
           { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
-          { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
-        ],
-      },
-      workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        runtimeCaching: [
           {
-            urlPattern: /^https:\/\/fonts\.googleapis\.com\//,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'google-fonts-cache',
-              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
-            },
+            src: '/icons/icon-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any maskable',
           },
         ],
+      },
+
+      devOptions: {
+        // Enable SW in dev so the debug page shows a live status
+        enabled: true,
+        type: 'module',
       },
     }),
     ...(process.env.NODE_ENV !== 'production' && process.env.REPL_ID !== undefined
