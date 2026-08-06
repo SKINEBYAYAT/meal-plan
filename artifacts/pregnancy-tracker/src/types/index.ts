@@ -22,6 +22,9 @@ export interface Meal {
   protein?: number;
   fats?: number;
   carbs?: number;
+  // Firestore-only fields — written by the Cloud Function, not the app UI
+  notified?: boolean;
+  lastNotifiedDate?: string | null;
 }
 
 export interface DayPlan {

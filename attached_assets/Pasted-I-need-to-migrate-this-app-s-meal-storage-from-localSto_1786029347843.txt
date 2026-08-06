@@ -1,0 +1,48 @@
+I need to migrate this app's meal storage from localStorage to Firestore, and set up a scheduled Cloud Function that sends push notifications automatically at each meal's time — including newly added meals or edited times, with no redeploy needed.
+
+Here's the full plan, please implement it step by step:
+
+STEP 1 — Add Firestore to the Firebase project
+- In src/firebase.ts, import and initialize Firestore alongside the existing messaging setup:
+  import { getFirestore } from 'firebase/firestore';
+  export const db = getFirestore(app);
+
+STEP 2 — Migrate meal data from localStorage to Firestore
+- Find the existing meal storage logic (likely in src/lib/storage.ts or similar).
+- Create a Firestore collection called "meals" with documents shaped like:
+  {
+    id: string,
+    day: string (e.g. "thu" or a date),
+    name: string (e.g. "Breakfast", "Lunch", custom names allowed),
+    time: string in 24h format (e.g. "07:30"),
+    items: string[] (e.g. ["Oatmeal", "Walnuts", "Fruit"]),
+    notified: boolean (false by default, used to prevent duplicate sends),
+    lastNotifiedDate: string or null (tracks which date it was last sent for, since meals repeat daily)
+  }
+- Update all existing meal CRUD operations (add, edit, delete, mark complete) in the app to read/write Firestore instead of localStorage.
+- Keep the existing UI and features exactly as they are — this is a storage-layer swap only, not a redesign.
+- If other data (habits, progress, profile name) also uses localStorage, LEAVE THOSE AS-IS — only migrate meal plan data for now.
+
+STEP 3 — Save the FCM token to Firestore
+- In the "Enable Reminders" button handler, after requestNotificationPermission() returns a token, save it to a Firestore collection called "tokens" with a single document (since this is single-user for now), e.g.:
+  { token: string, updatedAt: timestamp }
+- Overwrite the same document each time (use a fixed doc ID like "primary-user") rather than creating new ones.
+
+STEP 4 — Create a scheduled Cloud Function
+- Set up Firebase Cloud Functions in this project if not already present (functions/ directory, Node.js).
+- Write a scheduled function (using Firebase Scheduler, runs every 5 minutes) that:
+  1. Reads the current time (in the app's local timezone — Lebanon, GMT+3 / GMT+2 depending on DST)
+  2. Queries the "meals" collection for any meal whose "time" field matches the current time window (within the 5-minute check interval)
+  3. For each matching meal not already notified today (check lastNotifiedDate against today's date), sends a push notification via the Firebase Admin SDK using the token stored in the "tokens" collection, with:
+     - title: the meal name (e.g. "Breakfast")
+     - body: the meal items joined into a readable string (e.g. "Oatmeal, Walnuts, Fruit")
+  4. After sending, update that meal's lastNotifiedDate to today's date so it doesn't fire again until tomorrow.
+- Deploy this function.
+
+STEP 5 — Confirm the full flow works
+- Confirm meals added or edited in the app show up in Firestore immediately.
+- Confirm the token is saved in Firestore after tapping "Enable Reminders."
+- Confirm the scheduled function is deployed and its logs show it running every 5 minutes.
+- If possible, temporarily set a test meal's time to a few minutes from now and confirm a real push notification arrives on the phone.
+
+Note: this project will need to be on Firebase's Blaze (pay-as-you-go) plan for Cloud Functions and the Scheduler to work — flag if that blocks you so I can handle billing setup separately. Keep all existing app functionality (UI, habits, progress tracking, streaks) completely untouched — this is additive infrastructure only.

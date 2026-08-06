@@ -1,6 +1,7 @@
 import { useSettings } from '../hooks/useSettings';
 import { useNotifications } from '../hooks/useNotifications';
-import { requestNotificationPermission } from '../firebase';
+import { requestNotificationPermission, db } from '../firebase';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { Bell, User, Heart, Download, Upload, Trash2, ChevronRight, Bug } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
@@ -85,12 +86,21 @@ export default function SettingsPage() {
     setFcmLoading(true);
     const token = await requestNotificationPermission();
     console.log('[Settings] FCM token result:', token);
-    setFcmLoading(false);
     if (token) {
-      toast({ title: 'Reminders enabled 🔔', description: 'FCM token logged to console.' });
+      try {
+        await setDoc(doc(db, 'tokens', 'primary-user'), {
+          token,
+          updatedAt: serverTimestamp(),
+        });
+        toast({ title: 'Reminders enabled 🔔', description: 'Device registered for push notifications.' });
+      } catch (err) {
+        console.error('[Settings] Failed to save FCM token to Firestore:', err);
+        toast({ title: 'Reminders enabled 🔔', description: 'Token logged — Firestore save failed (check console).' });
+      }
     } else {
       toast({ title: 'Could not enable reminders', description: 'Check the console for details.', variant: 'destructive' });
     }
+    setFcmLoading(false);
   }, [toast]);
 
   const permissionLabel =

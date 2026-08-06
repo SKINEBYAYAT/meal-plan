@@ -1,5 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getMessaging, getToken } from 'firebase/messaging';
+import { getFirestore } from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey: "AIzaSyD5whIIeNe6BlAX-l9e1y2m5x3NXlNHTrs",
@@ -15,6 +16,7 @@ const VAPID_KEY = 'BAZFsFhWDAnDyY0nHU0Jkp1DaK112_DEesqjQ4B5fN8MFNp7vcWtqdU9Na3wS
 
 const app = initializeApp(firebaseConfig);
 const messaging = getMessaging(app);
+export const db = getFirestore(app);
 
 /**
  * Requests notification permission and returns the FCM registration token.
