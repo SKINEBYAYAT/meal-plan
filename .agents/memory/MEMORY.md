@@ -1,1 +1,2 @@
 - [PWA service worker caching](pwa-sw-caching.md) — keep SW network-first; cache-first served stale builds on phones ("No meals planned" despite fixed code). Bump pnt-vN to purge.
+- [Vercel deploy gotchas](vercel-deploy.md) — .vercelignore bare 'lib' deleted src/lib on Vercel; anchor root excludes with '/'; no /lib workspace refs in tracker.
