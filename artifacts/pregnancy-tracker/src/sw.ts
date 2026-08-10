@@ -7,7 +7,9 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 declare const self: ServiceWorkerGlobalScope & { __WB_MANIFEST: any[] };
 
-const CACHE_NAME = 'pnt-v1';
+// IMPORTANT: bump this version whenever cached content must be force-refreshed.
+// The activate handler deletes all caches that don't match this name.
+const CACHE_NAME = 'pnt-v2';
 
 // ─── Precache ────────────────────────────────────────────────────────────────
 
@@ -35,22 +37,35 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// ─── Fetch: cache-first for precached assets ─────────────────────────────────
+// ─── Fetch: NETWORK-FIRST with cache fallback ────────────────────────────────
+// Always try the network so users get the latest app immediately after a
+// deploy. The cache is only used when offline. (The previous cache-first
+// strategy served stale builds forever — never reintroduce it for HTML/JS.)
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+  // Only handle same-origin requests; let the browser handle everything else
+  if (!event.request.url.startsWith(self.location.origin)) return;
 
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request).then((response) => {
-        if (response.ok && event.request.url.startsWith(self.location.origin)) {
+    fetch(event.request)
+      .then((response) => {
+        if (response.ok) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then((c) => c.put(event.request, clone));
         }
         return response;
-      });
-    }),
+      })
+      .catch(async () => {
+        // Offline — serve from cache; for navigations fall back to app shell
+        const cached = await caches.match(event.request);
+        if (cached) return cached;
+        if (event.request.mode === 'navigate') {
+          const shell = await caches.match('/index.html');
+          if (shell) return shell;
+        }
+        return Response.error();
+      }),
   );
 });
 
