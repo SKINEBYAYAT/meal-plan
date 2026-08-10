@@ -5,7 +5,6 @@ import {
   setToStorage,
   MEAL_PLAN_KEY,
   COMPLETIONS_KEY,
-  MEAL_DELETIONS_KEY,
 } from '../lib/storage';
 import { DEFAULT_WEEKLY_MEALS } from '../data/defaultMeals';
 
@@ -13,111 +12,72 @@ import { DEFAULT_WEEKLY_MEALS } from '../data/defaultMeals';
 
 const MEALS_CHANGED = 'meals-store-changed';
 
+const VALID_DAYS = new Set<string>([
+  'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
+]);
+
 function saveAllMeals(meals: Record<string, Meal>): void {
   setToStorage(MEAL_PLAN_KEY, meals);
   window.dispatchEvent(new Event(MEALS_CHANGED));
 }
 
-// ─── Tombstone helpers ────────────────────────────────────────────────────────
-// Tombstones track default meal IDs the user has permanently deleted.
-// The seed skips tombstoned IDs so deletions survive page reload.
+// ─── Validation ───────────────────────────────────────────────────────────────
 
-function loadTombstones(): Set<string> {
-  return new Set(getFromStorage<string[]>(MEAL_DELETIONS_KEY, []));
+/** A stored value qualifies as a renderable meal only if all required fields exist. */
+function isValidMeal(value: unknown): value is Meal {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const m = value as Record<string, unknown>;
+  return (
+    typeof m.id === 'string' &&
+    typeof m.day === 'string' && VALID_DAYS.has(m.day) &&
+    typeof m.name === 'string' && m.name.length > 0 &&
+    typeof m.time === 'string' &&
+    Array.isArray(m.foods)
+  );
 }
 
-function saveTombstones(set: Set<string>): void {
-  setToStorage(MEAL_DELETIONS_KEY, Array.from(set));
-}
-
-// ─── One-time completions migration ──────────────────────────────────────────
-
-function migrateCompletions(): void {
-  if (localStorage.getItem(COMPLETIONS_KEY)) return;
-  const raw = localStorage.getItem('pregnancy_tracker_completions');
-  if (!raw) return;
-  try {
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      localStorage.setItem(COMPLETIONS_KEY, raw);
-      localStorage.removeItem('pregnancy_tracker_completions');
-      console.log(`[useMeals] Migrated completions → '${COMPLETIONS_KEY}'`);
-    }
-  } catch { /* corrupt — discard */ }
-}
-
-// ─── Canonical initial meals — ALWAYS starts from bundled defaults ────────────
+// ─── Canonical meals — the bundled 42 defaults are ALWAYS present ─────────────
 //
-// This is used as the React useState lazy initializer, so the UI ALWAYS has
-// the 42 default meals available on first render — no localStorage dependency.
-//
-// Strategy:
-//  1. Start from DEFAULT_WEEKLY_MEALS (guaranteed non-empty, bundled in the app)
-//  2. Merge any valid stored data on top (user edits / custom meals)
-//  3. Skip tombstoned IDs (meals the user explicitly deleted)
-//  4. Write the merged result back to localStorage so future reads are clean
-//
-// Handles gracefully: missing key, empty `{}`, old `[]` array format, corrupt JSON.
+// The 42 default meals are authoritative and always render. Stored data can:
+//  • customize a default meal (same ID, must keep the same day)
+//  • add custom meals (any valid meal with a non-default ID)
+// It can never remove a default meal or move it off its weekday, so every
+// default day always shows its 6 meals. No seed system, no migrations needed.
 
-function getInitialMeals(): Record<string, Meal> {
-  const tombstones = loadTombstones();
-
-  // Also migrate from old legacy keys before building initial state
-  const LEGACY_KEYS = ['pregnancy_tracker_meals_v2', 'pregnancy_tracker_meals'];
-  let legacyRaw: string | null = null;
-  if (!localStorage.getItem(MEAL_PLAN_KEY)) {
-    for (const key of LEGACY_KEYS) {
-      const raw = localStorage.getItem(key);
-      if (raw) {
-        legacyRaw = raw;
-        localStorage.removeItem(key);
-        console.log(`[useMeals] Found legacy data under '${key}', merging.`);
-        break;
-      }
-    }
-  }
-
-  // 1. Start with all bundled defaults (guaranteed 42 meals)
+function getCanonicalMeals(): Record<string, Meal> {
+  // 1. Start with all bundled defaults — guaranteed 42 meals
   const result: Record<string, Meal> = {};
   for (const [id, meal] of Object.entries(DEFAULT_WEEKLY_MEALS)) {
-    if (!tombstones.has(id)) result[id] = meal as Meal;
+    result[id] = meal as Meal;
   }
 
-  // 2. Helper to merge a raw JSON string on top of defaults
-  const mergeRaw = (raw: string) => {
-    try {
+  // 2. Overlay valid stored data (user edits of defaults + custom meals)
+  try {
+    const raw = localStorage.getItem(MEAL_PLAN_KEY);
+    if (raw) {
       const parsed: unknown = JSON.parse(raw);
-      // Accept objects only — reject arrays (old format), null, primitives
-      if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') return;
-      for (const [id, meal] of Object.entries(parsed as Record<string, unknown>)) {
-        if (
-          meal &&
-          typeof meal === 'object' &&
-          !Array.isArray(meal) &&
-          'day' in meal &&
-          'name' in meal &&
-          !tombstones.has(id)
-        ) {
-          result[id] = meal as Meal;
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        for (const [id, value] of Object.entries(parsed as Record<string, unknown>)) {
+          if (!isValidMeal(value)) continue;
+          const isDefault = id in DEFAULT_WEEKLY_MEALS;
+          if (isDefault) {
+            // Default IDs may be customized but must stay on their weekday
+            const canonical = DEFAULT_WEEKLY_MEALS[id];
+            if (value.day === canonical.day) {
+              result[id] = { ...value, id, day: canonical.day };
+            }
+          } else {
+            result[id] = value;
+          }
         }
       }
-    } catch { /* corrupt JSON — ignore */ }
-  };
+    }
+  } catch {
+    // corrupt JSON — defaults only
+  }
 
-  // 3. Merge legacy data first, then current stored data (current wins if both exist)
-  if (legacyRaw) mergeRaw(legacyRaw);
-  const storedRaw = localStorage.getItem(MEAL_PLAN_KEY);
-  if (storedRaw) mergeRaw(storedRaw);
-
-  // 4. Persist the clean merged result (fixes corrupt/empty/old-format storage)
-  setToStorage(MEAL_PLAN_KEY, result);
-
-  console.log(`[useMeals] Initial meals: ${Object.keys(result).length} total`);
   return result;
 }
-
-// Run completions migration at module load (meal data handled inside getInitialMeals)
-migrateCompletions();
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -128,11 +88,14 @@ function todayDateStr(): string {
 
 function getCompletedIds(date: string): Set<string> {
   const completions = getFromStorage<Record<string, string[]>>(COMPLETIONS_KEY, {});
-  return new Set(completions[date] ?? []);
+  const list = completions?.[date];
+  return new Set(Array.isArray(list) ? list.filter((x) => typeof x === 'string') : []);
 }
 
 function setCompletedIds(date: string, ids: Set<string>): void {
-  const completions = getFromStorage<Record<string, string[]>>(COMPLETIONS_KEY, {});
+  const stored = getFromStorage<Record<string, string[]>>(COMPLETIONS_KEY, {});
+  const completions =
+    stored && typeof stored === 'object' && !Array.isArray(stored) ? stored : {};
   completions[date] = Array.from(ids);
   setToStorage(COMPLETIONS_KEY, completions);
 }
@@ -140,16 +103,16 @@ function setCompletedIds(date: string, ids: Set<string>): void {
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useMeals(day: DayOfWeek | string) {
-  // Lazy initializer: always starts with defaults + user data merged.
-  // The UI will never show "No meals planned" due to an empty/missing localStorage.
-  const [allMeals, setAllMeals] = useState<Record<string, Meal>>(getInitialMeals);
+  // Synchronous lazy initializer — defaults are bundled, so the very first
+  // render always has all 42 meals. No storage dependency for visibility.
+  const [allMeals, setAllMeals] = useState<Record<string, Meal>>(getCanonicalMeals);
   const [completedIds, setCompletedIdsState] = useState<Set<string>>(
     () => getCompletedIds(todayDateStr()),
   );
 
   // Keep in sync when another component writes (add / edit / delete)
   useEffect(() => {
-    const handler = () => setAllMeals(getInitialMeals());
+    const handler = () => setAllMeals(getCanonicalMeals());
     window.addEventListener(MEALS_CHANGED, handler);
     return () => window.removeEventListener(MEALS_CHANGED, handler);
   }, []);
@@ -164,13 +127,6 @@ export function useMeals(day: DayOfWeek | string) {
     .filter((m) => m.day === day)
     .sort((a, b) => a.time.localeCompare(b.time));
 
-  // DEBUG: verify meal counts (remove once confirmed working)
-  console.log('MEAL DEBUG', {
-    totalMeals: Object.keys(allMeals).length,
-    selectedDay: day,
-    matchingMeals: templateMeals.length,
-  });
-
   // Merge today's completion state into each meal
   const dayPlan: DayPlan = {
     date: String(day),
@@ -180,32 +136,24 @@ export function useMeals(day: DayOfWeek | string) {
   /** Upsert a meal (add or edit). Completion state is never stored on the template. */
   const updateMeal = useCallback((meal: Meal) => {
     const { completed: _completed, ...data } = meal;
-    const all = getInitialMeals();
+    const all = getCanonicalMeals();
     all[meal.id] = data as Meal;
-    // Un-tombstone if a default meal is being restored/edited
-    if (meal.id in DEFAULT_WEEKLY_MEALS) {
-      const ts = loadTombstones();
-      ts.delete(meal.id);
-      saveTombstones(ts);
-    }
     saveAllMeals(all);
   }, []);
 
   /**
-   * Remove a meal permanently from the weekly template.
-   * For built-in default meals, records a tombstone so the meal is not
-   * re-seeded on the next page load.
+   * Remove a meal from the weekly plan.
+   * Custom meals are removed permanently. Built-in default meals are restored
+   * to their original bundled version (they always remain part of the plan).
    */
   const deleteMeal = useCallback((id: string) => {
-    const all = getInitialMeals();
-    delete all[id];
-    saveAllMeals(all);
-    // Tombstone default meals so they don't resurface after reload
+    const all = getCanonicalMeals();
     if (id in DEFAULT_WEEKLY_MEALS) {
-      const ts = loadTombstones();
-      ts.add(id);
-      saveTombstones(ts);
+      all[id] = DEFAULT_WEEKLY_MEALS[id] as Meal; // reset to bundled version
+    } else {
+      delete all[id];
     }
+    saveAllMeals(all);
   }, []);
 
   /**
@@ -227,8 +175,7 @@ export function useMeals(day: DayOfWeek | string) {
 // ─── Utility exports ──────────────────────────────────────────────────────────
 
 export function getAllMealsByDay(): Record<DayOfWeek, Meal[]> {
-  // Use getInitialMeals to guarantee defaults are always included
-  const all = getInitialMeals();
+  const all = getCanonicalMeals();
   const result: Record<DayOfWeek, Meal[]> = {
     monday: [], tuesday: [], wednesday: [], thursday: [],
     friday: [], saturday: [], sunday: [],

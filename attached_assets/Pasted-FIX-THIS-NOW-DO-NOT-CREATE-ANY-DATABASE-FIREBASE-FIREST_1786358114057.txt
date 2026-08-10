@@ -1,0 +1,89 @@
+FIX THIS NOW. DO NOT CREATE ANY DATABASE, FIREBASE, FIRESTORE, LOCALSTORAGE SYSTEM, SEED SCRIPT, MIGRATION, OR EXTRA STORAGE LOGIC.
+
+I ONLY WANT THE MEALS BUILT DIRECTLY INTO THE APP.
+
+Replace the current Meal Plan data with a simple built-in weekly meal list and DISPLAY IT DIRECTLY on the Meal Plan screen.
+
+The app must open the Meals page and immediately show the meals.
+
+MONDAY:
+Breakfast — 2 eggs, oatmeal with milk, banana
+Morning Snack — 3–4 rutab + handful of walnuts
+Lunch — grilled chicken, rice, broccoli
+Afternoon Snack — Greek yogurt
+Dinner — salmon, sweet potato, salad
+Evening Snack — cottage cheese
+
+TUESDAY:
+Breakfast — Greek yogurt, berries, oats, almonds
+Morning Snack — 3–4 rutab
+Lunch — beef, potatoes, green beans
+Afternoon Snack — apple with peanut butter
+Dinner — lentil soup, whole-grain bread, salad
+Evening Snack — milk
+
+WEDNESDAY:
+Breakfast — omelet with cheese and spinach
+Morning Snack — 3–4 rutab + almonds
+Lunch — turkey or chicken, rice, vegetables
+Afternoon Snack — yogurt
+Dinner — baked salmon, potatoes, carrots
+Evening Snack — banana
+
+THURSDAY:
+Breakfast — oatmeal with walnuts and fruit
+Morning Snack — 3–4 rutab
+Lunch — beef stew with potatoes
+Afternoon Snack — cottage cheese
+Dinner — chicken with rice and vegetables
+Evening Snack — kiwi
+
+FRIDAY:
+Breakfast — eggs with avocado and toast
+Morning Snack — 3–4 rutab + pistachios
+Lunch — salmon with quinoa or rice
+Afternoon Snack — Greek yogurt
+Dinner — chicken, sweet potato, broccoli
+Evening Snack — milk
+
+SATURDAY:
+Breakfast — yogurt, oats, berries
+Morning Snack — 3–4 rutab
+Lunch — beef, rice, vegetables
+Afternoon Snack — orange and walnuts
+Dinner — lentils with salad
+Evening Snack — cottage cheese
+
+SUNDAY:
+Breakfast — eggs, cheese, fruit
+Morning Snack — 3–4 rutab + almonds
+Lunch — roast chicken, potatoes, vegetables
+Afternoon Snack — yogurt with berries
+Dinner — grilled fish, rice and salad
+Evening Snack — banana
+
+IMPORTANT:
+
+These meals must be DIRECTLY rendered by the Meals page.
+
+When I tap MON, show the 6 Monday meals.
+
+When I tap TUE, show the 6 Tuesday meals.
+
+Same for every day.
+
+REMOVE the "No meals planned" state for these default days.
+
+DO NOT use Firebase.
+DO NOT use Firestore.
+DO NOT use localStorage.
+DO NOT use a database.
+DO NOT create a seed system.
+DO NOT create migration scripts.
+DO NOT add extra architecture.
+
+JUST PUT THE MEAL DATA IN THE APP CODE AND RENDER IT.
+
+Keep the existing design, icons, dark theme, navigation and Meal Plan UI exactly as they are.
+
+ONLY FIX THE MEALS SO THEY ARE VISIBLE.
