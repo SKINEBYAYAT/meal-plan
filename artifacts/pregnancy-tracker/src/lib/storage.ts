@@ -18,6 +18,11 @@ export const NOTIFICATIONS_KEY = 'pregnancy_tracker_notifications';
  * Keyed by actual calendar date — each week the meals start fresh (unchecked).
  */
 export const COMPLETIONS_KEY   = 'pregnancy-meal-completions';
+/**
+ * Tombstone set: string[] of meal IDs the user has permanently deleted.
+ * Default meals listed here are skipped during re-seeding so deletions survive reload.
+ */
+export const MEAL_DELETIONS_KEY = 'pregnancy-meal-deletions';
 
 export function getFromStorage<T>(key: string, defaultValue: T): T {
   try {

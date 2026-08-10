@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Link } from 'wouter';
-import { MEAL_PLAN_KEY, COMPLETIONS_KEY, HABITS_KEY, HABIT_LOGS_KEY, STREAKS_KEY, SETTINGS_KEY } from '../lib/storage';
+import { MEAL_PLAN_KEY, COMPLETIONS_KEY, MEAL_DELETIONS_KEY, HABITS_KEY, HABIT_LOGS_KEY, STREAKS_KEY, SETTINGS_KEY } from '../lib/storage';
 
 export default function SettingsPage() {
   const { settings, updateSettings } = useSettings();
@@ -48,10 +48,12 @@ export default function SettingsPage() {
     reader.onload = (ev) => {
       try {
         const data = JSON.parse(ev.target?.result as string);
-        // New key format (backups created after Task #7)
+        // Current backup schema (created after key migration)
         if (data.mealPlan) localStorage.setItem(MEAL_PLAN_KEY, data.mealPlan);
         if (data.mealCompletions) localStorage.setItem(COMPLETIONS_KEY, data.mealCompletions);
-        // Habits / streaks / settings are key-stable
+        // Legacy backup schema — `meals` field mapped to new plan key
+        if (!data.mealPlan && data.meals) localStorage.setItem(MEAL_PLAN_KEY, data.meals);
+        // Habits / streaks / settings keys are unchanged across versions
         if (data.habits) localStorage.setItem(HABITS_KEY, data.habits);
         if (data.logs) localStorage.setItem(HABIT_LOGS_KEY, data.logs);
         if (data.streaks) localStorage.setItem(STREAKS_KEY, data.streaks);
@@ -262,9 +264,9 @@ export default function SettingsPage() {
               onClick={() => {
                 if (confirm('Delete all data? This cannot be undone.')) {
                   [
-                    MEAL_PLAN_KEY, COMPLETIONS_KEY,
+                    MEAL_PLAN_KEY, COMPLETIONS_KEY, MEAL_DELETIONS_KEY,
                     HABITS_KEY, HABIT_LOGS_KEY, STREAKS_KEY, SETTINGS_KEY,
-                    // also clear any legacy keys that may still be present
+                    // legacy keys that may still be present from older versions
                     'pregnancy_tracker_meals_v2', 'pregnancy_tracker_meals',
                     'pregnancy_tracker_completions',
                   ].forEach((k) => localStorage.removeItem(k));
