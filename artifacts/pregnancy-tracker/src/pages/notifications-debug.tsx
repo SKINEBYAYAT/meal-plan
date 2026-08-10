@@ -5,7 +5,11 @@ import { useMeals } from '../hooks/useMeals';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import { NotificationDebugInfo } from '../types';
+import { DayOfWeek, NotificationDebugInfo } from '../types';
+
+const TODAY_DOW: DayOfWeek = (
+  ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as DayOfWeek[]
+)[new Date().getDay()];
 
 function StatusBadge({ ok, label }: { ok: boolean; label: string }) {
   return (
@@ -30,8 +34,7 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 }
 
 export default function NotificationsDebugPage() {
-  const today = format(new Date(), 'yyyy-MM-dd');
-  const { dayPlan } = useMeals(today);
+  const { dayPlan } = useMeals(TODAY_DOW);
   const {
     permission,
     swStatus,
@@ -90,7 +93,7 @@ export default function NotificationsDebugPage() {
       toast({ title: 'Permission required', description: 'Enable notifications first.', variant: 'destructive' });
       return;
     }
-    scheduleAll(dayPlan.meals, today);
+    scheduleAll(dayPlan.meals, TODAY_DOW);
     toast({ title: 'Rescheduled ✅', description: `Scheduled reminders for today's meals.` });
     setTimeout(refresh, 200);
   };

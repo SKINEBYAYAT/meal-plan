@@ -1,3 +1,12 @@
+export type DayOfWeek =
+  | 'monday'
+  | 'tuesday'
+  | 'wednesday'
+  | 'thursday'
+  | 'friday'
+  | 'saturday'
+  | 'sunday';
+
 export type MealType =
   | 'breakfast'
   | 'morning_snack'
@@ -8,27 +17,23 @@ export type MealType =
   | 'custom';
 
 export interface Meal {
-  id: string;
+  id: string;              // e.g. "monday-breakfast" or "thursday-1700000000000"
+  day: DayOfWeek;
   type: MealType;
   name: string;
-  icon?: string;           // emoji override, e.g. "🍕"
-  time: string;            // "07:30"
+  icon?: string;
+  time: string;            // "07:30" (24h)
   foods: string[];
   notes: string;
   reminderEnabled: boolean;
-  reminderTime: string;    // "07:15" – kept for backward-compat; scheduling uses meal.time
-  completed: boolean;
-  calories?: number;
-  protein?: number;
-  fats?: number;
-  carbs?: number;
-  // Firestore-only fields — written by the Cloud Function, not the app UI
-  notified?: boolean;
+  // Computed from localStorage at read time — NOT stored in Firestore
+  completed?: boolean;
+  // Written by Cloud Function only
   lastNotifiedDate?: string | null;
 }
 
 export interface DayPlan {
-  date: string;
+  date: string;  // holds DayOfWeek string ("monday") for meal plan, or yyyy-MM-dd for compat
   meals: Meal[];
 }
 
@@ -67,7 +72,7 @@ export type NotificationTrigger = 'before' | 'exact' | 'after';
 export interface ScheduledEntry {
   mealId: string;
   mealName: string;
-  timestamp: number;        // Unix ms
+  timestamp: number;
   type: NotificationTrigger;
 }
 
@@ -75,12 +80,12 @@ export interface LastNotification {
   title: string;
   body: string;
   mealId: string;
-  firedAt: string;          // ISO
+  firedAt: string;
 }
 
 export interface NotificationError {
   message: string;
-  at: string;               // ISO
+  at: string;
 }
 
 export interface NotificationStore {

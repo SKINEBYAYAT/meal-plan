@@ -8,84 +8,73 @@ import {
   deleteDoc,
   updateDoc,
   doc,
-  getDocs,
+  getDoc,
   writeBatch,
 } from 'firebase/firestore';
 import { db } from '../firebase';
-import { Meal, DayPlan } from '../types';
-import { format, addDays, startOfWeek } from 'date-fns';
+import { Meal, DayOfWeek, DayPlan } from '../types';
+import { getFromStorage, setToStorage, COMPLETIONS_KEY } from '../lib/storage';
 
-// ─── Seed data (same weekly plan as before) ───────────────────────────────────
+// ─── Weekday seed data ────────────────────────────────────────────────────────
 
-const DEFAULT_MEALS_SEED = [
-  // Monday
-  {
-    breakfast:        { time: '07:30', foods: ['2 eggs', 'Oatmeal with milk', 'Banana'] },
-    morning_snack:    { time: '10:00', foods: ['3-4 fresh rutab (dates)', 'Walnuts'] },
-    lunch:            { time: '13:00', foods: ['Grilled chicken', 'Rice', 'Broccoli'] },
-    afternoon_snack:  { time: '16:00', foods: ['Greek yogurt'] },
-    dinner:           { time: '19:30', foods: ['Salmon', 'Sweet potato', 'Salad'] },
-    night_snack:      { time: '21:30', foods: ['Cottage cheese'] },
+const SEED: Record<DayOfWeek, Record<string, { time: string; foods: string[] }>> = {
+  monday: {
+    breakfast:       { time: '07:30', foods: ['2 eggs', 'Oatmeal with milk', 'Banana'] },
+    morning_snack:   { time: '10:30', foods: ['3–4 fresh rutab', 'Handful of walnuts'] },
+    lunch:           { time: '13:00', foods: ['Grilled chicken', 'Rice', 'Broccoli'] },
+    afternoon_snack: { time: '16:00', foods: ['Greek yogurt'] },
+    dinner:          { time: '19:00', foods: ['Salmon', 'Sweet potato', 'Salad'] },
+    night_snack:     { time: '21:00', foods: ['Cottage cheese'] },
   },
-  // Tuesday
-  {
-    breakfast:        { time: '07:30', foods: ['Greek yogurt', 'Oats', 'Berries', 'Almonds'] },
-    morning_snack:    { time: '10:00', foods: ['3-4 rutab'] },
-    lunch:            { time: '13:00', foods: ['Lean beef', 'Potatoes', 'Green beans'] },
-    afternoon_snack:  { time: '16:00', foods: ['Apple with peanut butter'] },
-    dinner:           { time: '19:30', foods: ['Lentil soup', 'Whole-grain bread', 'Salad'] },
-    night_snack:      { time: '21:30', foods: ['Milk'] },
+  tuesday: {
+    breakfast:       { time: '07:30', foods: ['Greek yogurt', 'Berries', 'Oats', 'Almonds'] },
+    morning_snack:   { time: '10:30', foods: ['3–4 fresh rutab'] },
+    lunch:           { time: '13:00', foods: ['Beef', 'Potatoes', 'Green beans'] },
+    afternoon_snack: { time: '16:00', foods: ['Apple with peanut butter'] },
+    dinner:          { time: '19:00', foods: ['Lentil soup', 'Whole-grain bread', 'Salad'] },
+    night_snack:     { time: '21:00', foods: ['Milk'] },
   },
-  // Wednesday
-  {
-    breakfast:        { time: '07:30', foods: ['Cheese and spinach omelet'] },
-    morning_snack:    { time: '10:00', foods: ['3-4 rutab', 'Almonds'] },
-    lunch:            { time: '13:00', foods: ['Chicken', 'Rice', 'Vegetables'] },
-    afternoon_snack:  { time: '16:00', foods: ['Greek yogurt'] },
-    dinner:           { time: '19:30', foods: ['Salmon', 'Potatoes', 'Carrots'] },
-    night_snack:      { time: '21:30', foods: ['Banana'] },
+  wednesday: {
+    breakfast:       { time: '07:30', foods: ['Omelet with cheese and spinach'] },
+    morning_snack:   { time: '10:30', foods: ['3–4 fresh rutab', 'Almonds'] },
+    lunch:           { time: '13:00', foods: ['Turkey or chicken', 'Rice', 'Vegetables'] },
+    afternoon_snack: { time: '16:00', foods: ['Yogurt'] },
+    dinner:          { time: '19:00', foods: ['Baked salmon', 'Potatoes', 'Carrots'] },
+    night_snack:     { time: '21:00', foods: ['Banana'] },
   },
-  // Thursday
-  {
-    breakfast:        { time: '07:30', foods: ['Oatmeal', 'Walnuts', 'Fruit'] },
-    morning_snack:    { time: '10:00', foods: ['3-4 rutab'] },
-    lunch:            { time: '13:00', foods: ['Beef stew', 'Potatoes'] },
-    afternoon_snack:  { time: '16:00', foods: ['Cottage cheese'] },
-    dinner:           { time: '19:30', foods: ['Chicken', 'Rice', 'Vegetables'] },
-    night_snack:      { time: '21:30', foods: ['Kiwi'] },
+  thursday: {
+    breakfast:       { time: '07:30', foods: ['Oatmeal with walnuts and fruit'] },
+    morning_snack:   { time: '10:30', foods: ['3–4 fresh rutab'] },
+    lunch:           { time: '13:00', foods: ['Beef stew with potatoes'] },
+    afternoon_snack: { time: '16:00', foods: ['Cottage cheese'] },
+    dinner:          { time: '19:00', foods: ['Chicken with rice and vegetables'] },
+    night_snack:     { time: '21:00', foods: ['Kiwi'] },
   },
-  // Friday
-  {
-    breakfast:        { time: '07:30', foods: ['Eggs', 'Avocado', 'Whole-grain toast'] },
-    morning_snack:    { time: '10:00', foods: ['3-4 rutab', 'Pistachios'] },
-    lunch:            { time: '13:00', foods: ['Salmon', 'Rice'] },
-    afternoon_snack:  { time: '16:00', foods: ['Greek yogurt'] },
-    dinner:           { time: '19:30', foods: ['Chicken', 'Sweet potato', 'Broccoli'] },
-    night_snack:      { time: '21:30', foods: ['Milk'] },
+  friday: {
+    breakfast:       { time: '07:30', foods: ['Eggs with avocado and toast'] },
+    morning_snack:   { time: '10:30', foods: ['3–4 fresh rutab', 'Pistachios'] },
+    lunch:           { time: '13:00', foods: ['Salmon with quinoa or rice'] },
+    afternoon_snack: { time: '16:00', foods: ['Greek yogurt'] },
+    dinner:          { time: '19:00', foods: ['Chicken', 'Sweet potato', 'Broccoli'] },
+    night_snack:     { time: '21:00', foods: ['Milk'] },
   },
-  // Saturday
-  {
-    breakfast:        { time: '07:30', foods: ['Greek yogurt', 'Oats', 'Berries'] },
-    morning_snack:    { time: '10:00', foods: ['3-4 rutab'] },
-    lunch:            { time: '13:00', foods: ['Lean beef', 'Rice', 'Vegetables'] },
-    afternoon_snack:  { time: '16:00', foods: ['Orange', 'Walnuts'] },
-    dinner:           { time: '19:30', foods: ['Lentils', 'Salad'] },
-    night_snack:      { time: '21:30', foods: ['Cottage cheese'] },
+  saturday: {
+    breakfast:       { time: '07:30', foods: ['Yogurt', 'Oats', 'Berries'] },
+    morning_snack:   { time: '10:30', foods: ['3–4 fresh rutab'] },
+    lunch:           { time: '13:00', foods: ['Beef', 'Rice', 'Vegetables'] },
+    afternoon_snack: { time: '16:00', foods: ['Orange', 'Walnuts'] },
+    dinner:          { time: '19:00', foods: ['Lentils', 'Salad'] },
+    night_snack:     { time: '21:00', foods: ['Cottage cheese'] },
   },
-  // Sunday
-  {
-    breakfast:        { time: '07:30', foods: ['Eggs', 'Cheese', 'Fruit'] },
-    morning_snack:    { time: '10:00', foods: ['3-4 rutab', 'Almonds'] },
-    lunch:            { time: '13:00', foods: ['Roast chicken', 'Potatoes', 'Vegetables'] },
-    afternoon_snack:  { time: '16:00', foods: ['Greek yogurt', 'Berries'] },
-    dinner:           { time: '19:30', foods: ['Grilled fish', 'Rice', 'Salad'] },
-    night_snack:      { time: '21:30', foods: ['Banana'] },
+  sunday: {
+    breakfast:       { time: '07:30', foods: ['Eggs', 'Cheese', 'Fruit'] },
+    morning_snack:   { time: '10:30', foods: ['3–4 fresh rutab', 'Almonds'] },
+    lunch:           { time: '13:00', foods: ['Roast chicken', 'Potatoes', 'Vegetables'] },
+    afternoon_snack: { time: '16:00', foods: ['Yogurt', 'Berries'] },
+    dinner:          { time: '19:00', foods: ['Grilled fish', 'Rice', 'Salad'] },
+    night_snack:     { time: '21:00', foods: ['Banana'] },
   },
-];
-
-const MEAL_TYPES = [
-  'breakfast', 'morning_snack', 'lunch', 'afternoon_snack', 'dinner', 'night_snack',
-] as const;
+};
 
 const MEAL_NAMES: Record<string, string> = {
   breakfast: 'Breakfast',
@@ -93,62 +82,78 @@ const MEAL_NAMES: Record<string, string> = {
   lunch: 'Lunch',
   afternoon_snack: 'Afternoon Snack',
   dinner: 'Dinner',
-  night_snack: 'Night Snack',
+  night_snack: 'Evening Snack',
 };
 
-const REMINDER_OFFSETS: Record<string, string> = {
-  breakfast: '07:15', morning_snack: '09:45', lunch: '12:45',
-  afternoon_snack: '15:45', dinner: '19:15', night_snack: '21:15',
-};
+const DAYS: DayOfWeek[] = [
+  'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
+];
+const MEAL_TYPES = [
+  'breakfast', 'morning_snack', 'lunch', 'afternoon_snack', 'dinner', 'night_snack',
+] as const;
 
-// Module-level flag to avoid re-checking Firestore on every hook mount
+// ── Seed: runs once, checks for monday-breakfast as sentinel ─────────────────
+
 let seedChecked = false;
 
 async function seedMealsIfNeeded(): Promise<void> {
   if (seedChecked) return;
   seedChecked = true;
 
-  const snap = await getDocs(collection(db, 'meals'));
-  if (!snap.empty) return; // already seeded
+  // Use monday-breakfast as sentinel — if it exists the DB is seeded
+  const sentinel = await getDoc(doc(db, 'meals', 'monday-breakfast'));
+  if (sentinel.exists()) return;
 
-  const today = new Date();
-  const weekStart = startOfWeek(today, { weekStartsOn: 1 }); // Monday
   const batch = writeBatch(db);
-
-  DEFAULT_MEALS_SEED.forEach((dayMenu, index) => {
-    const d = addDays(weekStart, index);
-    const dateStr = format(d, 'yyyy-MM-dd');
-
-    MEAL_TYPES.forEach((type) => {
-      const slot = dayMenu[type];
-      const id = `${dateStr}-${type}`;
-      const meal: Meal & { date: string } = {
+  for (const day of DAYS) {
+    for (const type of MEAL_TYPES) {
+      const slot = SEED[day][type];
+      const id = `${day}-${type}`;
+      const meal: Omit<Meal, 'completed'> & { day: DayOfWeek } = {
         id,
-        date: dateStr,
+        day,
         type,
         name: MEAL_NAMES[type],
         time: slot.time,
         foods: slot.foods,
         notes: '',
         reminderEnabled: false,
-        reminderTime: REMINDER_OFFSETS[type],
-        completed: false,
-        notified: false,
         lastNotifiedDate: null,
       };
       batch.set(doc(db, 'meals', id), meal);
-    });
-  });
-
+    }
+  }
   await batch.commit();
-  console.log('[useMeals] Firestore seeded with weekly meal plan');
+  console.log('[useMeals] Firestore seeded with recurring weekly meal plan');
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function todayDateStr(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function getCompletedIds(date: string): Set<string> {
+  const completions = getFromStorage<Record<string, string[]>>(COMPLETIONS_KEY, {});
+  return new Set(completions[date] ?? []);
+}
+
+function setCompletedIds(date: string, ids: Set<string>): void {
+  const completions = getFromStorage<Record<string, string[]>>(COMPLETIONS_KEY, {});
+  completions[date] = Array.from(ids);
+  setToStorage(COMPLETIONS_KEY, completions);
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
-export function useMeals(date: string) {
-  const [dayPlan, setDayPlan] = useState<DayPlan>({ date, meals: [] });
+export function useMeals(day: DayOfWeek | string) {
+  const [templateMeals, setTemplateMeals] = useState<Meal[]>([]);
+  const [completedIds, setCompletedIdsState] = useState<Set<string>>(
+    () => getCompletedIds(todayDateStr()),
+  );
 
+  // Subscribe to Firestore for this weekday's template meals
   useEffect(() => {
     let cancelled = false;
     let unsubscribe: (() => void) | undefined;
@@ -156,13 +161,12 @@ export function useMeals(date: string) {
     seedMealsIfNeeded()
       .then(() => {
         if (cancelled) return;
-
-        const q = query(collection(db, 'meals'), where('date', '==', date));
+        const q = query(collection(db, 'meals'), where('day', '==', day));
         unsubscribe = onSnapshot(q, (snapshot) => {
-          const meals: Meal[] = snapshot.docs
+          const meals = snapshot.docs
             .map((d) => d.data() as Meal)
             .sort((a, b) => a.time.localeCompare(b.time));
-          setDayPlan({ date, meals });
+          setTemplateMeals(meals);
         });
       })
       .catch((err) => console.error('[useMeals] seed error', err));
@@ -171,21 +175,44 @@ export function useMeals(date: string) {
       cancelled = true;
       unsubscribe?.();
     };
-  }, [date]);
+  }, [day]);
 
-  /** Upsert a meal. Works for both add and edit. */
-  const updateMeal = (meal: Meal) => {
-    void setDoc(doc(db, 'meals', meal.id), { ...meal, date });
+  // Refresh completions when day changes (always use today's actual date)
+  useEffect(() => {
+    setCompletedIdsState(getCompletedIds(todayDateStr()));
+  }, [day]);
+
+  // Merge completion state into meals for consumers
+  const dayPlan: DayPlan = {
+    date: String(day),
+    meals: templateMeals.map((m) => ({ ...m, completed: completedIds.has(m.id) })),
   };
 
-  /** Delete a meal by id. */
+  /** Upsert a meal in Firestore (add or edit). Completion state is NOT saved here. */
+  const updateMeal = (meal: Meal) => {
+    const { completed: _completed, ...firestoreData } = meal;
+    void setDoc(doc(db, 'meals', meal.id), firestoreData);
+  };
+
+  /** Remove a meal from Firestore. */
   const deleteMeal = (id: string) => {
     void deleteDoc(doc(db, 'meals', id));
   };
 
-  /** Toggle completed flag without overwriting the whole document. */
+  /**
+   * Toggle today's completion for a meal.
+   * Writes to localStorage only — the recurring template is unchanged.
+   */
   const toggleMealCompleted = (id: string, completed: boolean) => {
-    void updateDoc(doc(db, 'meals', id), { completed });
+    const today = todayDateStr();
+    const ids = getCompletedIds(today);
+    if (completed) { ids.add(id); } else { ids.delete(id); }
+    setCompletedIds(today, ids);
+    setCompletedIdsState(new Set(ids));
+    // Optimistically patch the Firestore doc's lastNotifiedDate reset (no-op if not needed)
+    if (!completed) {
+      void updateDoc(doc(db, 'meals', id), { lastNotifiedDate: null }).catch(() => {/* ok */});
+    }
   };
 
   return { dayPlan, updateMeal, deleteMeal, toggleMealCompleted };

@@ -9,6 +9,7 @@ import { Check, Flame, ChevronRight, Clock } from 'lucide-react';
 import { Link } from 'wouter';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
+import { DayOfWeek } from '../types';
 
 const QUOTES = [
   "A grand adventure is about to begin.",
@@ -23,21 +24,27 @@ const QUOTES = [
   "Take it one beautiful, challenging, miraculous day at a time."
 ];
 
+// Today's weekday — used to load today's recurring meal plan
+const TODAY_DOW: DayOfWeek = (
+  ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as DayOfWeek[]
+)[new Date().getDay()];
+
+const todayStr = format(new Date(), 'yyyy-MM-dd');
+
 export default function HomePage() {
   const { settings } = useSettings();
-  const todayStr = format(new Date(), 'yyyy-MM-dd');
-  const { dayPlan, toggleMealCompleted } = useMeals(todayStr);
+  const { dayPlan, toggleMealCompleted } = useMeals(TODAY_DOW);
   const { activeHabits, todaysLogs, toggleHabit } = useHabits(todayStr);
   const { stats, streaks } = useProgress(todayStr);
 
   const [quote] = useState(() => QUOTES[Math.floor(Math.random() * QUOTES.length)]);
 
-  // Find next meal
+  // Find the next upcoming incomplete meal for today
   const now = new Date();
   const nextMeal = [...dayPlan.meals]
-    .filter(m => !m.completed)
+    .filter((m) => !m.completed)
     .sort((a, b) => a.time.localeCompare(b.time))
-    .find(m => {
+    .find((m) => {
       const [h, min] = m.time.split(':').map(Number);
       const target = new Date();
       target.setHours(h, min, 0, 0);
@@ -47,14 +54,16 @@ export default function HomePage() {
   const timeLeft = useCountdown(nextMeal?.time || null);
 
   return (
-    <motion.div 
-      initial={{ opacity: 0, y: 10 }} 
-      animate={{ opacity: 1, y: 0 }} 
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
       className="p-4 space-y-6"
     >
       <header className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-medium text-gray-400">{format(new Date(), 'EEEE, MMMM d')}</p>
+          <p className="text-sm font-medium text-gray-400">
+            {format(new Date(), 'EEEE, MMMM d')}
+          </p>
           <h1 className="text-2xl font-bold mt-1">Hello, {settings.userName}</h1>
         </div>
         <div className="flex flex-col items-end">
@@ -74,19 +83,19 @@ export default function HomePage() {
       {/* Progress Circle */}
       <section className="flex flex-col items-center bg-[#161B22] border border-[#2d3748] rounded-3xl p-6 relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-1 bg-[#2d3748]">
-          <motion.div 
-            className="h-full bg-[#4CAF50]" 
-            initial={{ width: 0 }} 
-            animate={{ width: `${stats.completionPercentage}%` }} 
+          <motion.div
+            className="h-full bg-[#4CAF50]"
+            initial={{ width: 0 }}
+            animate={{ width: `${stats.completionPercentage}%` }}
             transition={{ duration: 1 }}
           />
         </div>
         <h2 className="text-sm font-medium text-gray-400 mb-4">Today's Progress</h2>
-        
+
         <div className="relative flex items-center justify-center w-40 h-40">
           <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
             <circle cx="50" cy="50" r="45" fill="none" stroke="#2d3748" strokeWidth="8" />
-            <motion.circle 
+            <motion.circle
               cx="50" cy="50" r="45" fill="none" stroke="#4CAF50" strokeWidth="8"
               strokeDasharray={283}
               initial={{ strokeDashoffset: 283 }}
@@ -97,7 +106,9 @@ export default function HomePage() {
           </svg>
           <div className="absolute flex flex-col items-center">
             <span className="text-4xl font-bold">{stats.completionPercentage}%</span>
-            <span className="text-xs text-gray-400 mt-1">{stats.completedTasks} / {stats.totalTasks} Done</span>
+            <span className="text-xs text-gray-400 mt-1">
+              {stats.completedTasks} / {stats.totalTasks} Done
+            </span>
           </div>
         </div>
       </section>
@@ -107,7 +118,9 @@ export default function HomePage() {
         <section>
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-lg">Next Meal</h2>
-            <Link href="/meals" className="text-sm text-[#4CAF50] flex items-center">View Plan <ChevronRight className="w-4 h-4" /></Link>
+            <Link href="/meals" className="text-sm text-[#4CAF50] flex items-center">
+              View Plan <ChevronRight className="w-4 h-4" />
+            </Link>
           </div>
           <div className="bg-[#161B22] border border-[#2d3748] rounded-2xl p-4 flex items-center justify-between">
             <div className="flex-1">
@@ -118,11 +131,11 @@ export default function HomePage() {
               <h3 className="font-bold text-lg">{nextMeal.name}</h3>
               <p className="text-gray-400 text-sm truncate mt-1">{nextMeal.foods.join(', ')}</p>
             </div>
-            
             {timeLeft && (
               <div className="ml-4 flex flex-col items-center bg-[#0D1117] px-4 py-2 rounded-xl">
                 <span className="text-xl font-mono font-bold tracking-tight">
-                  {timeLeft.hours.toString().padStart(2, '0')}:{timeLeft.minutes.toString().padStart(2, '0')}
+                  {timeLeft.hours.toString().padStart(2, '0')}:
+                  {timeLeft.minutes.toString().padStart(2, '0')}
                 </span>
                 <span className="text-[10px] uppercase tracking-wider text-gray-500 mt-1">Left</span>
               </div>
@@ -133,7 +146,9 @@ export default function HomePage() {
         <section>
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-lg">Next Meal</h2>
-            <Link href="/meals" className="text-sm text-[#4CAF50] flex items-center">View Plan <ChevronRight className="w-4 h-4" /></Link>
+            <Link href="/meals" className="text-sm text-[#4CAF50] flex items-center">
+              View Plan <ChevronRight className="w-4 h-4" />
+            </Link>
           </div>
           <div className="bg-[#161B22] border border-[#2d3748] rounded-2xl p-6 text-center text-gray-400">
             All meals completed for today!
@@ -145,34 +160,43 @@ export default function HomePage() {
       <section>
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold text-lg">Daily Habits</h2>
-          <Link href="/habits" className="text-sm text-[#4CAF50] flex items-center">See All <ChevronRight className="w-4 h-4" /></Link>
+          <Link href="/habits" className="text-sm text-[#4CAF50] flex items-center">
+            See All <ChevronRight className="w-4 h-4" />
+          </Link>
         </div>
         <div className="space-y-2">
-          {activeHabits.slice(0, 4).map(habit => {
-            const isCompleted = todaysLogs.some(l => l.habitId === habit.id && l.completed);
+          {activeHabits.slice(0, 4).map((habit) => {
+            const isCompleted = todaysLogs.some((l) => l.habitId === habit.id && l.completed);
             return (
               <button
                 key={habit.id}
                 onClick={() => toggleHabit(habit.id, !isCompleted)}
                 className={cn(
-                  "w-full flex items-center justify-between p-4 rounded-2xl transition-all border text-left",
-                  isCompleted 
-                    ? "bg-[#4CAF50]/10 border-[#4CAF50]/30" 
-                    : "bg-[#161B22] border-[#2d3748]"
+                  'w-full flex items-center justify-between p-4 rounded-2xl transition-all border text-left',
+                  isCompleted
+                    ? 'bg-[#4CAF50]/10 border-[#4CAF50]/30'
+                    : 'bg-[#161B22] border-[#2d3748]',
                 )}
                 data-testid={`btn-quick-habit-${habit.id}`}
               >
-                <span className={cn("font-medium transition-colors", isCompleted ? "text-[#4CAF50]" : "text-white")}>
+                <span
+                  className={cn(
+                    'font-medium transition-colors',
+                    isCompleted ? 'text-[#4CAF50]' : 'text-white',
+                  )}
+                >
                   {habit.name}
                 </span>
-                <div className={cn(
-                  "w-6 h-6 rounded-full flex items-center justify-center transition-colors",
-                  isCompleted ? "bg-[#4CAF50] text-white" : "border-2 border-[#2d3748]"
-                )}>
+                <div
+                  className={cn(
+                    'w-6 h-6 rounded-full flex items-center justify-center transition-colors',
+                    isCompleted ? 'bg-[#4CAF50] text-white' : 'border-2 border-[#2d3748]',
+                  )}
+                >
                   {isCompleted && <Check className="w-4 h-4" />}
                 </div>
               </button>
-            )
+            );
           })}
         </div>
       </section>

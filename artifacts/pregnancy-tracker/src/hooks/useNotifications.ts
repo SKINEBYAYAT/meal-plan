@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { notificationScheduler } from '../lib/notifications';
-import { Meal, NotificationDebugInfo } from '../types';
+import { DayOfWeek, Meal, NotificationDebugInfo } from '../types';
 
 export function useNotifications() {
   const [permission, setPermission] = useState<NotificationPermission>('default');
@@ -39,17 +39,17 @@ export function useNotifications() {
    * Schedule all reminder-enabled meals for a given date.
    * Cancels any previously scheduled timers first.
    */
-  const scheduleAll = useCallback((meals: Meal[], date: string): void => {
+  const scheduleAll = useCallback((meals: Meal[], day: DayOfWeek): void => {
     if (Notification.permission !== 'granted') return;
-    notificationScheduler.scheduleAll(meals, date);
+    notificationScheduler.scheduleAll(meals, day);
   }, []);
 
   /**
    * Schedule (or re-schedule) a single meal's reminders.
    */
-  const scheduleMeal = useCallback((meal: Meal, date: string): void => {
+  const scheduleMeal = useCallback((meal: Meal, day: DayOfWeek): void => {
     if (Notification.permission !== 'granted') return;
-    notificationScheduler.scheduleMeal(meal, date);
+    notificationScheduler.scheduleMeal(meal, day);
   }, []);
 
   /**

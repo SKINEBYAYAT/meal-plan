@@ -1,18 +1,22 @@
 import { DayPlan, HabitDefinition, HabitLog, AppSettings, StreakData } from '../types';
 
-export const MEALS_KEY = 'pregnancy_tracker_meals';
-export const HABITS_KEY = 'pregnancy_tracker_habits';
-export const HABIT_LOGS_KEY = 'pregnancy_tracker_habit_logs';
-export const SETTINGS_KEY = 'pregnancy_tracker_settings';
-export const STREAKS_KEY = 'pregnancy_tracker_streaks';
+export const MEALS_KEY         = 'pregnancy_tracker_meals';
+export const HABITS_KEY        = 'pregnancy_tracker_habits';
+export const HABIT_LOGS_KEY    = 'pregnancy_tracker_habit_logs';
+export const SETTINGS_KEY      = 'pregnancy_tracker_settings';
+export const STREAKS_KEY       = 'pregnancy_tracker_streaks';
 export const NOTIFICATIONS_KEY = 'pregnancy_tracker_notifications';
+/**
+ * Completion history: Record<yyyy-MM-dd, string[]>
+ * Value = array of meal IDs completed on that date.
+ * Keyed by actual calendar date so each day starts fresh.
+ */
+export const COMPLETIONS_KEY   = 'pregnancy_tracker_completions';
 
 export function getFromStorage<T>(key: string, defaultValue: T): T {
   try {
     const item = localStorage.getItem(key);
-    if (item) {
-      return JSON.parse(item) as T;
-    }
+    if (item) return JSON.parse(item) as T;
   } catch (e) {
     console.error(`Error reading ${key} from localStorage`, e);
   }

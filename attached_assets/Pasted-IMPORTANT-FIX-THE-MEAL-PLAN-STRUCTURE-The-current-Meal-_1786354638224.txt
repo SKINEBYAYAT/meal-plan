@@ -1,0 +1,502 @@
+IMPORTANT: FIX THE MEAL PLAN STRUCTURE
+
+The current Meal Plan screen is wrong.
+
+It is displaying actual calendar dates and day numbers such as:
+
+MON 10
+TUE 11
+WED 12
+THU 13
+FRI 14
+SAT 15
+SUN 16
+
+I DO NOT WANT THIS.
+
+This app is a WEEKLY RECURRING MEAL PLAN, NOT A CALENDAR.
+
+Completely change the Meal Plan logic and UI so it uses ONLY the seven weekdays:
+
+Monday
+Tuesday
+Wednesday
+Thursday
+Friday
+Saturday
+Sunday
+
+There must be NO:
+
+- Date numbers
+- Month names
+- Calendar dates
+- "10", "11", "12", etc.
+- Date navigation
+- Actual calendar dates
+
+The same Monday plan should repeat every Monday.
+The same Tuesday plan should repeat every Tuesday.
+The same Wednesday plan should repeat every Wednesday.
+And so on.
+
+==================================================
+WEEKLY MEAL PLAN
+==================================================
+
+Use this exact recurring weekly plan as the default:
+
+MONDAY
+
+Breakfast:
+2 eggs
+Oatmeal with milk
+Banana
+
+Morning Snack:
+3–4 fresh rutab
+Handful of walnuts
+
+Lunch:
+Grilled chicken
+Rice
+Broccoli
+
+Afternoon Snack:
+Greek yogurt
+
+Dinner:
+Salmon
+Sweet potato
+Salad
+
+Evening Snack:
+Cottage cheese
+
+
+TUESDAY
+
+Breakfast:
+Greek yogurt
+Berries
+Oats
+Almonds
+
+Morning Snack:
+3–4 fresh rutab
+
+Lunch:
+Beef
+Potatoes
+Green beans
+
+Afternoon Snack:
+Apple with peanut butter
+
+Dinner:
+Lentil soup
+Whole-grain bread
+Salad
+
+Evening Snack:
+Milk
+
+
+WEDNESDAY
+
+Breakfast:
+Omelet with cheese and spinach
+
+Morning Snack:
+3–4 fresh rutab
+Almonds
+
+Lunch:
+Turkey or chicken
+Rice
+Vegetables
+
+Afternoon Snack:
+Yogurt
+
+Dinner:
+Baked salmon
+Potatoes
+Carrots
+
+Evening Snack:
+Banana
+
+
+THURSDAY
+
+Breakfast:
+Oatmeal with walnuts and fruit
+
+Morning Snack:
+3–4 fresh rutab
+
+Lunch:
+Beef stew with potatoes
+
+Afternoon Snack:
+Cottage cheese
+
+Dinner:
+Chicken with rice and vegetables
+
+Evening Snack:
+Kiwi
+
+
+FRIDAY
+
+Breakfast:
+Eggs with avocado and toast
+
+Morning Snack:
+3–4 fresh rutab
+Pistachios
+
+Lunch:
+Salmon with quinoa or rice
+
+Afternoon Snack:
+Greek yogurt
+
+Dinner:
+Chicken
+Sweet potato
+Broccoli
+
+Evening Snack:
+Milk
+
+
+SATURDAY
+
+Breakfast:
+Yogurt
+Oats
+Berries
+
+Morning Snack:
+3–4 fresh rutab
+
+Lunch:
+Beef
+Rice
+Vegetables
+
+Afternoon Snack:
+Orange
+Walnuts
+
+Dinner:
+Lentils
+Salad
+
+Evening Snack:
+Cottage cheese
+
+
+SUNDAY
+
+Breakfast:
+Eggs
+Cheese
+Fruit
+
+Morning Snack:
+3–4 fresh rutab
+Almonds
+
+Lunch:
+Roast chicken
+Potatoes
+Vegetables
+
+Afternoon Snack:
+Yogurt
+Berries
+
+Dinner:
+Grilled fish
+Rice
+Salad
+
+Evening Snack:
+Banana
+
+==================================================
+MEAL PLAN UI
+==================================================
+
+At the top of the Meal Plan page show seven weekday buttons:
+
+MON
+TUE
+WED
+THU
+FRI
+SAT
+SUN
+
+DO NOT show numbers underneath them.
+
+For example:
+
+MON
+TUE
+WED
+THU
+FRI
+SAT
+SUN
+
+The selected weekday should have the green accent color.
+
+When Monday is selected, show Monday's recurring meals.
+
+When Tuesday is selected, show Tuesday's recurring meals.
+
+etc.
+
+The page should NOT depend on today's actual date.
+
+==================================================
+RECURRING LOGIC
+==================================================
+
+The meal plan is a weekly template.
+
+Internally, meals should be associated with:
+
+dayOfWeek
+
+NOT:
+
+specificDate
+
+For example:
+
+Monday + Breakfast
+Monday + Morning Snack
+Monday + Lunch
+Monday + Afternoon Snack
+Monday + Dinner
+Monday + Evening Snack
+
+These repeat every Monday.
+
+Tuesday meals repeat every Tuesday.
+
+Continue for all seven days.
+
+==================================================
+MEAL TIMES
+==================================================
+
+Give each default meal a configurable time.
+
+Use these default times:
+
+Breakfast — 7:30 AM
+Morning Snack — 10:30 AM
+Lunch — 1:00 PM
+Afternoon Snack — 4:00 PM
+Dinner — 7:00 PM
+Evening Snack — 9:00 PM
+
+These are recurring weekly times.
+
+For example:
+
+Monday Breakfast
+Every Monday at 7:30 AM
+
+Tuesday Breakfast
+Every Tuesday at 7:30 AM
+
+etc.
+
+==================================================
+ADD MEAL
+==================================================
+
+When I press + or Add Meal:
+
+Allow me to select:
+
+Day of Week
+Meal Name
+Meal Type
+Time
+Food
+Notes
+Reminder ON/OFF
+Icon
+
+Example:
+
+Day:
+Thursday
+
+Meal:
+Afternoon Snack
+
+Time:
+4:30 PM
+
+Food:
+Greek yogurt + rutab
+
+Reminder:
+ON
+
+This meal should repeat every Thursday.
+
+==================================================
+EDIT MEAL
+==================================================
+
+When editing a meal, allow me to change:
+
+Meal name
+Food
+Time
+Notes
+Icon
+Reminder ON/OFF
+Day of week
+
+Changes should automatically apply to the recurring weekly plan.
+
+==================================================
+DELETE MEAL
+==================================================
+
+Deleting a meal should remove it from that weekday's recurring plan.
+
+Show a confirmation before deleting.
+
+==================================================
+NOTIFICATIONS
+==================================================
+
+Notifications must also use the recurring weekday system.
+
+Examples:
+
+Monday Breakfast:
+Every Monday at 7:30 AM
+
+Monday Morning Snack:
+Every Monday at 10:30 AM
+
+Monday Lunch:
+Every Monday at 1:00 PM
+
+etc.
+
+Do NOT schedule notifications based on a single calendar date.
+
+If I create:
+
+Thursday Afternoon Snack
+4:30 PM
+Reminder ON
+
+then the notification should repeat every Thursday at 4:30 PM.
+
+If I turn the reminder OFF:
+
+Do not send the notification.
+
+If I change the time:
+
+Cancel the previous schedule and use the new time.
+
+If I delete the meal:
+
+Remove its notification.
+
+==================================================
+COMPLETION TRACKING
+==================================================
+
+IMPORTANT:
+
+The MEAL PLAN is recurring.
+
+The COMPLETION STATUS is daily.
+
+For example:
+
+Monday's breakfast exists every Monday.
+
+If I complete Monday breakfast today, only TODAY'S completion should be checked.
+
+Next Monday should start as incomplete again.
+
+Never permanently mark a recurring meal as completed.
+
+Store completion history separately using the actual date internally.
+
+The user does NOT need to see dates in the Meal Plan UI.
+
+==================================================
+HOME SCREEN
+==================================================
+
+The Home screen can still determine today's weekday automatically.
+
+For example, if today is Monday:
+
+Today's Meals
+
+Breakfast
+Morning Snack
+Lunch
+Afternoon Snack
+Dinner
+Evening Snack
+
+The Home screen should show today's weekday name, but do not display unnecessary calendar numbers.
+
+==================================================
+IMPORTANT
+==================================================
+
+Do NOT turn this into a calendar application.
+
+This is a:
+
+WEEKLY RECURRING PREGNANCY MEAL PLAN
+
+The seven days are permanent templates.
+
+Monday always means Monday.
+Tuesday always means Tuesday.
+Wednesday always means Wednesday.
+Thursday always means Thursday.
+Friday always means Friday.
+Saturday always means Saturday.
+Sunday always means Sunday.
+
+Only completion history uses actual dates internally.
+
+After making these changes:
+
+1. Remove all date numbers from the Meal Plan UI.
+2. Remove calendar-date logic from the weekly meal template.
+3. Convert the meal plan to dayOfWeek-based recurring data.
+4. Populate all seven days with the exact meals above.
+5. Make all meal times recurring weekly.
+6. Make notifications recurring by weekday.
+7. Make custom meals follow the same recurring system.
+8. Make completion tracking daily without changing the recurring meal plan.
+9. Make sure the existing Home, Habits, Progress, and Settings pages continue working.
+10. Do not break the existing design or navigation.
+
+The final Meal Plan screen should look like a clean weekly planner, NOT a calendar.

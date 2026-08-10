@@ -1,34 +1,34 @@
 /**
  * Core notification scheduler — singleton, framework-agnostic.
  *
- * Scheduling logic per meal (when reminderEnabled = true, today only):
+ * Scheduling logic per meal (when reminderEnabled = true, TODAY's weekday only):
  *   • T-15 min  → "Breakfast in 15 minutes"
  *   • T+0       → "Time to eat!"
- *   • T+30 min  → follow-up if meal not yet completed
+ *   • T+30 min  → follow-up if meal not yet completed (checked via localStorage)
  *
- * All timers are in-memory (Map). Scheduled metadata is persisted in
- * localStorage so the debug page can show upcoming reminders across sessions.
+ * Meals are weekday-based (DayOfWeek). Timers only fire when the selected
+ * day matches today's weekday.
  */
 
 import {
+  DayOfWeek,
   Meal,
-  DayPlan,
   NotificationStore,
   ScheduledEntry,
   NotificationDebugInfo,
 } from '../types';
-import { getFromStorage, setToStorage, MEALS_KEY, NOTIFICATIONS_KEY } from './storage';
+import { getFromStorage, setToStorage, COMPLETIONS_KEY, NOTIFICATIONS_KEY } from './storage';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const MEAL_ICONS: Record<string, string> = {
-  breakfast: '🍳',
-  morning_snack: '🍎',
-  lunch: '🍗',
+  breakfast:       '🍳',
+  morning_snack:   '🍎',
+  lunch:           '🍗',
   afternoon_snack: '🥑',
-  dinner: '🍽️',
-  night_snack: '🌙',
-  custom: '🥘',
+  dinner:          '🍽️',
+  night_snack:     '🌙',
+  custom:          '🥘',
 };
 
 const MOTIVATIONAL = [
@@ -50,12 +50,17 @@ const DEFAULT_STORE: NotificationStore = {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function todayStr(): string {
+function todayDateStr(): string {
   const d = new Date();
-  const y = d.getFullYear();
-  const mo = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${mo}-${day}`;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function todayDayOfWeek(): DayOfWeek {
+  const days: DayOfWeek[] = [
+    'sunday', 'monday', 'tuesday', 'wednesday',
+    'thursday', 'friday', 'saturday',
+  ];
+  return days[new Date().getDay()];
 }
 
 function randomItem<T>(arr: T[]): T {
@@ -68,8 +73,6 @@ class NotificationScheduler {
   private timers = new Map<string, ReturnType<typeof setTimeout>>();
   private swReg: ServiceWorkerRegistration | null = null;
   private _swStatus: 'checking' | 'registered' | 'unavailable' = 'checking';
-
-  // ── Initialisation ──────────────────────────────────────────────────────────
 
   async init(): Promise<void> {
     if (!('serviceWorker' in navigator)) {
@@ -91,19 +94,22 @@ class NotificationScheduler {
 
   // ── Public scheduling API ───────────────────────────────────────────────────
 
-  /** Schedule (or re-schedule) all reminder-enabled meals for a given date. */
-  scheduleAll(meals: Meal[], date: string): void {
+  /**
+   * (Re-)schedule all reminder-enabled meals for a given weekday.
+   * Only fires timers when `day` equals today's actual weekday.
+   */
+  scheduleAll(meals: Meal[], day: DayOfWeek): void {
     this.cancelAll();
-    if (date !== todayStr()) return; // Only today's meals get timers
+    if (day !== todayDayOfWeek()) return;
     for (const meal of meals) {
-      if (meal.reminderEnabled) this.scheduleMeal(meal, date);
+      if (meal.reminderEnabled) this.scheduleMeal(meal, day);
     }
   }
 
-  /** Schedule the three triggers for a single meal. No-ops if not today. */
-  scheduleMeal(meal: Meal, date: string): void {
+  /** Schedule the three triggers for a single meal. No-ops if not today's weekday. */
+  scheduleMeal(meal: Meal, day: DayOfWeek): void {
     if (!meal.reminderEnabled) return;
-    if (date !== todayStr()) return;
+    if (day !== todayDayOfWeek()) return;
 
     const [h, m] = meal.time.split(':').map(Number);
     const mealTime = new Date();
@@ -131,11 +137,11 @@ class NotificationScheduler {
       void this.fire(`${icon} ${meal.name} — Time to eat!`, body, meal.id);
     });
 
-    // T+30 — only if meal still incomplete
+    // T+30 — only if meal still incomplete today
     this.scheduleTimer(meal, 'after', mealTs + 30 * 60_000, now, () => {
-      const allMeals = getFromStorage<Record<string, DayPlan>>(MEALS_KEY, {});
-      const current = allMeals[todayStr()]?.meals.find((mx) => mx.id === meal.id);
-      if (!current?.completed) {
+      const completions = getFromStorage<Record<string, string[]>>(COMPLETIONS_KEY, {});
+      const isCompleted = (completions[todayDateStr()] ?? []).includes(meal.id);
+      if (!isCompleted) {
         void this.fire(
           `${icon} Don't forget ${meal.name}`,
           `You haven't logged your ${meal.name.toLowerCase()} yet.\n${randomItem(MOTIVATIONAL)}`,
@@ -145,21 +151,18 @@ class NotificationScheduler {
     });
   }
 
-  /** Cancel all three timers for a meal (call on delete or toggle-off). */
   cancelMeal(mealId: string): void {
     for (const type of ['before', 'exact', 'after'] as const) {
       this.clearTimer(this.key(mealId, type));
     }
   }
 
-  /** Cancel every scheduled timer (e.g. when notifications are disabled). */
   cancelAll(): void {
     for (const t of this.timers.values()) clearTimeout(t);
     this.timers.clear();
     this.mutateStore((s) => ({ ...s, scheduled: {} }));
   }
 
-  /** Fire a test notification immediately. */
   async sendTestNotification(): Promise<void> {
     await this.fire(
       '🔔 Test Notification',
@@ -167,8 +170,6 @@ class NotificationScheduler {
       'test',
     );
   }
-
-  // ── Debug info ──────────────────────────────────────────────────────────────
 
   getDebugInfo(): NotificationDebugInfo {
     const store = this.readStore();
@@ -209,29 +210,18 @@ class NotificationScheduler {
       cb();
     }, delay);
     this.timers.set(k, t);
-    this.addEntry(k, {
-      mealId: meal.id,
-      mealName: meal.name,
-      timestamp: targetTs,
-      type,
-    });
+    this.addEntry(k, { mealId: meal.id, mealName: meal.name, timestamp: targetTs, type });
   }
 
   private clearTimer(k: string): void {
     const t = this.timers.get(k);
-    if (t !== undefined) {
-      clearTimeout(t);
-      this.timers.delete(k);
-    }
+    if (t !== undefined) { clearTimeout(t); this.timers.delete(k); }
     this.removeEntry(k);
   }
 
   private async fire(title: string, body: string, mealId: string): Promise<void> {
     if (Notification.permission !== 'granted') return;
-    if (!this.swReg) {
-      // Re-try init (e.g. permission was granted after init)
-      await this.init();
-    }
+    if (!this.swReg) await this.init();
     if (!this.swReg) {
       this.logError(new Error('Service Worker not available'));
       return;
@@ -241,7 +231,6 @@ class NotificationScheduler {
         body,
         icon: '/icons/icon-192.png',
         badge: '/icons/icon-192.png',
-        // Unique tag prevents duplicate banners for the same trigger
         tag: `pnt-${mealId}-${Date.now()}`,
         data: { mealId },
         requireInteraction: false,
@@ -254,8 +243,6 @@ class NotificationScheduler {
       this.logError(e);
     }
   }
-
-  // ── Storage ─────────────────────────────────────────────────────────────────
 
   private readStore(): NotificationStore {
     return getFromStorage<NotificationStore>(NOTIFICATIONS_KEY, DEFAULT_STORE);
@@ -284,7 +271,5 @@ class NotificationScheduler {
     }));
   }
 }
-
-// ─── Singleton export ─────────────────────────────────────────────────────────
 
 export const notificationScheduler = new NotificationScheduler();
