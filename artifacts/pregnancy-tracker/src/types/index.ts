@@ -26,9 +26,9 @@ export interface Meal {
   foods: string[];
   notes: string;
   reminderEnabled: boolean;
-  // Computed from localStorage at read time — NOT stored in Firestore
+  // Computed from pregnancy-meal-completions at read time — never stored on the template
   completed?: boolean;
-  // Written by Cloud Function only
+  // Used by Cloud Function for push notification deduplication
   lastNotifiedDate?: string | null;
 }
 
