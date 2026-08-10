@@ -1,0 +1,666 @@
+STOP USING FIREBASE/FIRESTORE FOR THE MEAL PLAN.
+
+I specifically want the pregnancy meal plan BUILT INTO THE APP.
+
+The weekly meal plan must work completely without Firebase, Firestore, Supabase, or any external database.
+
+Firebase/Firestore may remain in the project later for PUSH NOTIFICATIONS if needed, but the MEAL DATA itself must NOT depend on Firebase.
+
+==================================================
+1. MEAL PLAN MUST BE BUILT INTO THE APP
+==================================================
+
+Create a permanent DEFAULT_WEEKLY_MEALS dataset inside the application code.
+
+The app must contain all 42 default meals:
+
+7 days × 6 meals.
+
+The application must be able to load these meals immediately on first launch without:
+
+- Firebase
+- Firestore
+- Supabase
+- API calls
+- Internet
+- Authentication
+
+The app must work completely offline.
+
+==================================================
+2. EXACT WEEKLY PLAN
+==================================================
+
+MONDAY
+
+Breakfast:
+2 eggs
+Oatmeal with milk
+Banana
+
+Morning Snack:
+3–4 fresh rutab
+Handful of walnuts
+
+Lunch:
+Grilled chicken
+Rice
+Broccoli
+
+Afternoon Snack:
+Greek yogurt
+
+Dinner:
+Salmon
+Sweet potato
+Salad
+
+Evening Snack:
+Cottage cheese
+
+
+TUESDAY
+
+Breakfast:
+Greek yogurt
+Berries
+Oats
+Almonds
+
+Morning Snack:
+3–4 fresh rutab
+
+Lunch:
+Beef
+Potatoes
+Green beans
+
+Afternoon Snack:
+Apple with peanut butter
+
+Dinner:
+Lentil soup
+Whole-grain bread
+Salad
+
+Evening Snack:
+Milk
+
+
+WEDNESDAY
+
+Breakfast:
+Omelet with cheese and spinach
+
+Morning Snack:
+3–4 fresh rutab
+Almonds
+
+Lunch:
+Turkey or chicken
+Rice
+Vegetables
+
+Afternoon Snack:
+Yogurt
+
+Dinner:
+Baked salmon
+Potatoes
+Carrots
+
+Evening Snack:
+Banana
+
+
+THURSDAY
+
+Breakfast:
+Oatmeal with walnuts and fruit
+
+Morning Snack:
+3–4 fresh rutab
+
+Lunch:
+Beef stew with potatoes
+
+Afternoon Snack:
+Cottage cheese
+
+Dinner:
+Chicken with rice and vegetables
+
+Evening Snack:
+Kiwi
+
+
+FRIDAY
+
+Breakfast:
+Eggs with avocado and toast
+
+Morning Snack:
+3–4 fresh rutab
+Pistachios
+
+Lunch:
+Salmon with quinoa or rice
+
+Afternoon Snack:
+Greek yogurt
+
+Dinner:
+Chicken
+Sweet potato
+Broccoli
+
+Evening Snack:
+Milk
+
+
+SATURDAY
+
+Breakfast:
+Yogurt
+Oats
+Berries
+
+Morning Snack:
+3–4 fresh rutab
+
+Lunch:
+Beef
+Rice
+Vegetables
+
+Afternoon Snack:
+Orange
+Walnuts
+
+Dinner:
+Lentils
+Salad
+
+Evening Snack:
+Cottage cheese
+
+
+SUNDAY
+
+Breakfast:
+Eggs
+Cheese
+Fruit
+
+Morning Snack:
+3–4 fresh rutab
+Almonds
+
+Lunch:
+Roast chicken
+Potatoes
+Vegetables
+
+Afternoon Snack:
+Yogurt
+Berries
+
+Dinner:
+Grilled fish
+Rice
+Salad
+
+Evening Snack:
+Banana
+
+==================================================
+3. DEFAULT DATA
+==================================================
+
+Create a file such as:
+
+src/data/defaultMeals.ts
+
+Export:
+
+DEFAULT_WEEKLY_MEALS
+
+The IDs must be deterministic:
+
+monday-breakfast
+monday-morning-snack
+monday-lunch
+monday-afternoon-snack
+monday-dinner
+monday-evening-snack
+
+and the same structure for Tuesday through Sunday.
+
+Do NOT use dates.
+
+Do NOT use random IDs for the built-in meals.
+
+==================================================
+4. LOCAL STORAGE
+==================================================
+
+Use localStorage for the user's editable meal plan.
+
+Storage key:
+
+pregnancy-meal-plan
+
+On first launch:
+
+If pregnancy-meal-plan does not exist:
+
+copy DEFAULT_WEEKLY_MEALS into localStorage.
+
+If it already exists:
+
+load the user's existing meals.
+
+IMPORTANT:
+
+Do NOT overwrite the user's meals every time the app opens.
+
+The default data should only initialize missing data.
+
+==================================================
+5. ADD CUSTOM MEAL
+==================================================
+
+When I add a meal, save it to:
+
+pregnancy-meal-plan
+
+The meal must contain:
+
+id
+dayOfWeek
+mealType
+name
+foods
+time
+reminderEnabled
+icon
+notes
+
+Example:
+
+{
+  id: "custom-123456",
+  dayOfWeek: "monday",
+  mealType: "snack",
+  name: "Afternoon Snack",
+  foods: ["Apple", "Greek yogurt"],
+  time: "16:30",
+  reminderEnabled: true,
+  icon: "apple"
+}
+
+==================================================
+6. CUSTOM MEALS REPEAT EVERY WEEK
+==================================================
+
+This is extremely important.
+
+If I add:
+
+Monday
+Custom Snack
+4:30 PM
+
+it is NOT a one-time meal.
+
+It becomes part of the recurring Monday plan.
+
+It must appear:
+
+This Monday
+Next Monday
+Every Monday
+
+until I delete it.
+
+The same applies to every weekday.
+
+==================================================
+7. EDIT
+==================================================
+
+When I edit a meal:
+
+Update the recurring weekly template in localStorage.
+
+The change must persist after:
+
+- Refresh
+- Closing the app
+- Reopening the app
+- Installing the PWA
+
+==================================================
+8. DELETE
+==================================================
+
+When I delete a meal:
+
+Remove it from the local weekly plan.
+
+Ask for confirmation first.
+
+Do not delete unrelated meals.
+
+==================================================
+9. NO FIRESTORE FOR MEALS
+==================================================
+
+Remove all Firestore reads/writes from:
+
+useMeals.ts
+
+The Meal Plan must NEVER call:
+
+getDocs
+getDoc
+setDoc
+addDoc
+updateDoc
+deleteDoc
+onSnapshot
+
+for meal data.
+
+There should be zero network dependency for displaying the meal plan.
+
+==================================================
+10. COMPLETION TRACKING
+==================================================
+
+Keep completion history separate from the recurring meal template.
+
+Use localStorage.
+
+Example:
+
+pregnancy-meal-completions
+
+Store completion by actual date internally.
+
+Example:
+
+{
+  "2026-08-10": [
+    "monday-breakfast",
+    "monday-lunch"
+  ]
+}
+
+This means:
+
+The meal repeats weekly.
+
+The completion does NOT repeat weekly.
+
+Next Monday, the same meal should start unchecked.
+
+==================================================
+11. HOME PAGE
+==================================================
+
+The Home page should determine today's weekday automatically.
+
+If today is Monday:
+
+Show Monday's recurring meals.
+
+If today is Tuesday:
+
+Show Tuesday's recurring meals.
+
+etc.
+
+Do not use calendar dates to determine which meals exist.
+
+==================================================
+12. NOTIFICATIONS
+==================================================
+
+Keep the notification system separate from the meal database.
+
+The meal plan itself must work without Firebase.
+
+Each meal can have:
+
+Reminder ON/OFF
+Time
+
+For example:
+
+Monday Breakfast
+7:30 AM
+Reminder ON
+
+means:
+
+Every Monday at 7:30 AM.
+
+Custom meals must work the same way.
+
+If I add:
+
+Thursday Snack
+4:30 PM
+Reminder ON
+
+it should be treated as a recurring Thursday reminder.
+
+If Reminder is OFF:
+
+Do not send it.
+
+If the time changes:
+
+Update the reminder.
+
+If the meal is deleted:
+
+Remove the reminder.
+
+Do NOT add Firebase/Firestore dependency just to display or save meals.
+
+==================================================
+13. IMPORTANT: DO NOT LOSE MY CURRENT PLAN
+==================================================
+
+Before changing the code:
+
+Inspect the current useMeals.ts and existing meal data.
+
+Do not blindly overwrite working features.
+
+Preserve:
+
+Add
+Edit
+Delete
+Complete
+Reminder toggle
+Meal times
+Icons
+Notes
+Home page integration
+Progress integration
+
+Only replace the Firestore storage layer with localStorage/default app data.
+
+==================================================
+14. PROGRESS
+==================================================
+
+Progress must continue working.
+
+Calculate:
+
+Today's completed meals
+Weekly completion
+Habit completion
+Streaks
+History
+
+Use the local meal plan and local completion history.
+
+Do not require Firestore for basic progress.
+
+==================================================
+15. OFFLINE
+==================================================
+
+The entire meal system must work with:
+
+Airplane Mode ON
+
+No internet connection
+
+No Firebase connection
+
+No server
+
+The user should still be able to:
+
+View meals
+Add meals
+Edit meals
+Delete meals
+Complete meals
+Change times
+Change reminders
+
+==================================================
+16. FIRST LAUNCH
+==================================================
+
+On a completely fresh installation:
+
+The app should immediately show:
+
+Monday → 6 meals
+Tuesday → 6 meals
+Wednesday → 6 meals
+Thursday → 6 meals
+Friday → 6 meals
+Saturday → 6 meals
+Sunday → 6 meals
+
+There must NEVER be:
+
+"No meals planned"
+
+for the default seven days.
+
+==================================================
+17. DO NOT CHANGE THE UI
+==================================================
+
+Keep the current design.
+
+Keep:
+
+Home
+Meals
+Habits
+Progress
+Settings
+
+Keep the dark theme.
+
+Keep the bottom navigation.
+
+Keep the weekday selector:
+
+MON
+TUE
+WED
+THU
+FRI
+SAT
+SUN
+
+NO DATE NUMBERS.
+
+NO CALENDAR.
+
+==================================================
+18. FINAL VERIFICATION
+==================================================
+
+Before telling me you're finished, actually test the application.
+
+Test:
+
+Fresh app launch:
+→ 42 default meals appear.
+
+Monday:
+→ 6 meals.
+
+Tuesday:
+→ 6 meals.
+
+Wednesday:
+→ 6 meals.
+
+Thursday:
+→ 6 meals.
+
+Friday:
+→ 6 meals.
+
+Saturday:
+→ 6 meals.
+
+Sunday:
+→ 6 meals.
+
+Add custom meal:
+→ appears immediately.
+
+Refresh:
+→ custom meal still exists.
+
+Close/reopen:
+→ custom meal still exists.
+
+Change custom meal:
+→ change persists.
+
+Delete custom meal:
+→ remains deleted after refresh.
+
+Turn reminder ON:
+→ notification system receives the meal.
+
+Turn reminder OFF:
+→ notification is disabled.
+
+Complete a meal:
+→ completion is recorded.
+
+Next week:
+→ meal exists again but starts incomplete.
+
+Finally run:
+
+npm run build
+
+and make sure there are:
+
+ZERO TypeScript errors
+ZERO build errors
+ZERO runtime errors
+ZERO Firestore dependency for the meal plan.
+
+Do not just tell me that the meals are seeded.
+
+Actually verify that the 42 meals are visible in the application.
