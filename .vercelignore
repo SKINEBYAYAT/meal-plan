@@ -1,5 +1,5 @@
 artifacts/api-server
 artifacts/mockup-sandbox
 functions
-lib
-scripts
+/lib
+/scripts
