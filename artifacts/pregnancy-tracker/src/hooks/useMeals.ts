@@ -1,23 +1,13 @@
-import { useState, useEffect } from 'react';
-import {
-  collection,
-  query,
-  where,
-  onSnapshot,
-  setDoc,
-  deleteDoc,
-  updateDoc,
-  doc,
-  getDoc,
-  writeBatch,
-} from 'firebase/firestore';
-import { db } from '../firebase';
+import { useState, useEffect, useCallback } from 'react';
 import { Meal, DayOfWeek, DayPlan } from '../types';
 import { getFromStorage, setToStorage, COMPLETIONS_KEY } from '../lib/storage';
 
+// ─── Storage key ──────────────────────────────────────────────────────────────
+export const MEALS_STORE_KEY = 'pregnancy_tracker_meals_v2';
+
 // ─── Weekday seed data ────────────────────────────────────────────────────────
 
-const SEED: Record<DayOfWeek, Record<string, { time: string; foods: string[] }>> = {
+const SEED_DATA: Record<DayOfWeek, Record<string, { time: string; foods: string[] }>> = {
   monday: {
     breakfast:       { time: '07:30', foods: ['2 eggs', 'Oatmeal with milk', 'Banana'] },
     morning_snack:   { time: '10:30', foods: ['3–4 fresh rutab', 'Handful of walnuts'] },
@@ -92,24 +82,33 @@ const MEAL_TYPES = [
   'breakfast', 'morning_snack', 'lunch', 'afternoon_snack', 'dinner', 'night_snack',
 ] as const;
 
-// ── Seed: runs once, checks for monday-breakfast as sentinel ─────────────────
+// ─── In-memory store + cross-component reactivity ─────────────────────────────
+// One source of truth: Record<mealId, Meal> kept in localStorage and mirrored here.
 
-let seedChecked = false;
+const MEALS_CHANGED = 'meals-store-changed';
 
-async function seedMealsIfNeeded(): Promise<void> {
-  if (seedChecked) return;
-  seedChecked = true;
+function loadAllMeals(): Record<string, Meal> {
+  return getFromStorage<Record<string, Meal>>(MEALS_STORE_KEY, {});
+}
 
-  // Use monday-breakfast as sentinel — if it exists the DB is seeded
-  const sentinel = await getDoc(doc(db, 'meals', 'monday-breakfast'));
-  if (sentinel.exists()) return;
+function saveAllMeals(meals: Record<string, Meal>): void {
+  setToStorage(MEALS_STORE_KEY, meals);
+  // Notify all useMeals() hook instances to re-render
+  window.dispatchEvent(new Event(MEALS_CHANGED));
+}
 
-  const batch = writeBatch(db);
+// ─── Seed (idempotent — only writes missing docs) ─────────────────────────────
+function seedIfNeeded(): void {
+  const existing = loadAllMeals();
+  const updated = { ...existing };
+  let added = 0;
+
   for (const day of DAYS) {
     for (const type of MEAL_TYPES) {
-      const slot = SEED[day][type];
       const id = `${day}-${type}`;
-      const meal: Omit<Meal, 'completed'> & { day: DayOfWeek } = {
+      if (updated[id]) continue; // already exists — don't overwrite
+      const slot = SEED_DATA[day][type];
+      updated[id] = {
         id,
         day,
         type,
@@ -118,14 +117,21 @@ async function seedMealsIfNeeded(): Promise<void> {
         foods: slot.foods,
         notes: '',
         reminderEnabled: false,
-        lastNotifiedDate: null,
       };
-      batch.set(doc(db, 'meals', id), meal);
+      added++;
     }
   }
-  await batch.commit();
-  console.log('[useMeals] Firestore seeded with recurring weekly meal plan');
+
+  if (added > 0) {
+    saveAllMeals(updated);
+    console.log(`[useMeals] Seeded ${added} missing meals into localStorage.`);
+  } else {
+    console.log('[useMeals] All 42 seed meals already present.');
+  }
 }
+
+// Run seed immediately when this module loads (synchronous — no async wait needed)
+seedIfNeeded();
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -148,72 +154,86 @@ function setCompletedIds(date: string, ids: Set<string>): void {
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useMeals(day: DayOfWeek | string) {
-  const [templateMeals, setTemplateMeals] = useState<Meal[]>([]);
+  // All meals for the requested weekday, derived synchronously from localStorage
+  const [allMeals, setAllMeals] = useState<Record<string, Meal>>(loadAllMeals);
   const [completedIds, setCompletedIdsState] = useState<Set<string>>(
     () => getCompletedIds(todayDateStr()),
   );
 
-  // Subscribe to Firestore for this weekday's template meals
+  // Re-read meals when another component writes (cross-component reactivity)
   useEffect(() => {
-    let cancelled = false;
-    let unsubscribe: (() => void) | undefined;
+    const handler = () => setAllMeals(loadAllMeals());
+    window.addEventListener(MEALS_CHANGED, handler);
+    return () => window.removeEventListener(MEALS_CHANGED, handler);
+  }, []);
 
-    seedMealsIfNeeded()
-      .then(() => {
-        if (cancelled) return;
-        const q = query(collection(db, 'meals'), where('day', '==', day));
-        unsubscribe = onSnapshot(q, (snapshot) => {
-          const meals = snapshot.docs
-            .map((d) => d.data() as Meal)
-            .sort((a, b) => a.time.localeCompare(b.time));
-          setTemplateMeals(meals);
-        });
-      })
-      .catch((err) => console.error('[useMeals] seed error', err));
-
-    return () => {
-      cancelled = true;
-      unsubscribe?.();
-    };
-  }, [day]);
-
-  // Refresh completions when day changes (always use today's actual date)
+  // Refresh completions when the selected day changes
   useEffect(() => {
     setCompletedIdsState(getCompletedIds(todayDateStr()));
   }, [day]);
 
-  // Merge completion state into meals for consumers
+  // Filter + sort meals for the requested weekday
+  const templateMeals: Meal[] = Object.values(allMeals)
+    .filter((m) => m.day === day)
+    .sort((a, b) => a.time.localeCompare(b.time));
+
+  // Merge completion state
   const dayPlan: DayPlan = {
     date: String(day),
     meals: templateMeals.map((m) => ({ ...m, completed: completedIds.has(m.id) })),
   };
 
-  /** Upsert a meal in Firestore (add or edit). Completion state is NOT saved here. */
-  const updateMeal = (meal: Meal) => {
-    const { completed: _completed, ...firestoreData } = meal;
-    void setDoc(doc(db, 'meals', meal.id), firestoreData);
-  };
+  /** Upsert a meal (add or edit). */
+  const updateMeal = useCallback((meal: Meal) => {
+    const { completed: _completed, ...data } = meal;
+    const all = loadAllMeals();
+    all[meal.id] = data as Meal;
+    saveAllMeals(all);
+  }, []);
 
-  /** Remove a meal from Firestore. */
-  const deleteMeal = (id: string) => {
-    void deleteDoc(doc(db, 'meals', id));
-  };
+  /** Remove a meal. */
+  const deleteMeal = useCallback((id: string) => {
+    const all = loadAllMeals();
+    delete all[id];
+    saveAllMeals(all);
+  }, []);
 
   /**
    * Toggle today's completion for a meal.
-   * Writes to localStorage only — the recurring template is unchanged.
+   * Only touches localStorage completion history — the recurring template is unchanged.
    */
-  const toggleMealCompleted = (id: string, completed: boolean) => {
+  const toggleMealCompleted = useCallback((id: string, completed: boolean) => {
     const today = todayDateStr();
     const ids = getCompletedIds(today);
     if (completed) { ids.add(id); } else { ids.delete(id); }
     setCompletedIds(today, ids);
     setCompletedIdsState(new Set(ids));
-    // Optimistically patch the Firestore doc's lastNotifiedDate reset (no-op if not needed)
-    if (!completed) {
-      void updateDoc(doc(db, 'meals', id), { lastNotifiedDate: null }).catch(() => {/* ok */});
-    }
-  };
+  }, []);
 
   return { dayPlan, updateMeal, deleteMeal, toggleMealCompleted };
+}
+
+// ─── Utility exports (used by useProgress) ────────────────────────────────────
+
+/** Returns all meals grouped by day. */
+export function getAllMealsByDay(): Record<DayOfWeek, Meal[]> {
+  const all = loadAllMeals();
+  const result: Record<DayOfWeek, Meal[]> = {
+    monday: [], tuesday: [], wednesday: [], thursday: [],
+    friday: [], saturday: [], sunday: [],
+  };
+  for (const meal of Object.values(all)) {
+    if (meal.day in result) result[meal.day].push(meal);
+  }
+  return result;
+}
+
+/** Returns a count of meals per day-of-week. */
+export function getMealCountByDay(): Partial<Record<DayOfWeek, number>> {
+  const byDay = getAllMealsByDay();
+  const counts: Partial<Record<DayOfWeek, number>> = {};
+  for (const [day, meals] of Object.entries(byDay)) {
+    if (meals.length > 0) counts[day as DayOfWeek] = meals.length;
+  }
+  return counts;
 }

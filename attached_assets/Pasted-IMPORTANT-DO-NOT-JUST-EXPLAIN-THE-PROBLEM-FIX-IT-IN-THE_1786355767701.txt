@@ -1,0 +1,727 @@
+IMPORTANT: DO NOT JUST EXPLAIN THE PROBLEM. FIX IT IN THE CODE AND VERIFY IT WORKS.
+
+The Meal Plan UI is now showing:
+
+MON   TUE   WED   THU   FRI   SAT   SUN
+
+This part is correct.
+
+However, ALL OF MY MEALS ARE MISSING.
+
+The screen says:
+
+"No meals planned"
+
+but the app is supposed to contain my complete weekly pregnancy meal plan.
+
+Your previous implementation said that 42 meals would be seeded into Firestore, but they are clearly not appearing.
+
+I need you to FIX THE DATA AND THE RECURRING WEEKLY LOGIC.
+
+==================================================
+1. IMPORTANT: WEEKLY RECURRING TEMPLATE
+==================================================
+
+This is NOT a calendar.
+
+The Meal Plan is a permanent weekly template.
+
+There are exactly 7 recurring days:
+
+Monday
+Tuesday
+Wednesday
+Thursday
+Friday
+Saturday
+Sunday
+
+Meals belong to a DAY OF WEEK, not a specific calendar date.
+
+For example:
+
+Monday Breakfast
+
+means:
+
+Every Monday Breakfast
+
+It must appear this Monday, next Monday, the Monday after that, etc.
+
+It must NOT be tied to:
+
+2026-08-10
+
+or any other specific date.
+
+==================================================
+2. SEED THE COMPLETE MEAL PLAN
+==================================================
+
+Make sure these meals actually exist in Firestore.
+
+There must be 42 default meals:
+
+7 days × 6 meals per day.
+
+Use these EXACT meals:
+
+MONDAY
+
+Breakfast:
+2 eggs
+Oatmeal with milk
+Banana
+
+Morning Snack:
+3–4 fresh rutab
+Handful of walnuts
+
+Lunch:
+Grilled chicken
+Rice
+Broccoli
+
+Afternoon Snack:
+Greek yogurt
+
+Dinner:
+Salmon
+Sweet potato
+Salad
+
+Evening Snack:
+Cottage cheese
+
+
+TUESDAY
+
+Breakfast:
+Greek yogurt
+Berries
+Oats
+Almonds
+
+Morning Snack:
+3–4 fresh rutab
+
+Lunch:
+Beef
+Potatoes
+Green beans
+
+Afternoon Snack:
+Apple with peanut butter
+
+Dinner:
+Lentil soup
+Whole-grain bread
+Salad
+
+Evening Snack:
+Milk
+
+
+WEDNESDAY
+
+Breakfast:
+Omelet with cheese and spinach
+
+Morning Snack:
+3–4 fresh rutab
+Almonds
+
+Lunch:
+Turkey or chicken
+Rice
+Vegetables
+
+Afternoon Snack:
+Yogurt
+
+Dinner:
+Baked salmon
+Potatoes
+Carrots
+
+Evening Snack:
+Banana
+
+
+THURSDAY
+
+Breakfast:
+Oatmeal with walnuts and fruit
+
+Morning Snack:
+3–4 fresh rutab
+
+Lunch:
+Beef stew with potatoes
+
+Afternoon Snack:
+Cottage cheese
+
+Dinner:
+Chicken with rice and vegetables
+
+Evening Snack:
+Kiwi
+
+
+FRIDAY
+
+Breakfast:
+Eggs with avocado and toast
+
+Morning Snack:
+3–4 fresh rutab
+Pistachios
+
+Lunch:
+Salmon with quinoa or rice
+
+Afternoon Snack:
+Greek yogurt
+
+Dinner:
+Chicken
+Sweet potato
+Broccoli
+
+Evening Snack:
+Milk
+
+
+SATURDAY
+
+Breakfast:
+Yogurt
+Oats
+Berries
+
+Morning Snack:
+3–4 fresh rutab
+
+Lunch:
+Beef
+Rice
+Vegetables
+
+Afternoon Snack:
+Orange
+Walnuts
+
+Dinner:
+Lentils
+Salad
+
+Evening Snack:
+Cottage cheese
+
+
+SUNDAY
+
+Breakfast:
+Eggs
+Cheese
+Fruit
+
+Morning Snack:
+3–4 fresh rutab
+Almonds
+
+Lunch:
+Roast chicken
+Potatoes
+Vegetables
+
+Afternoon Snack:
+Yogurt
+Berries
+
+Dinner:
+Grilled fish
+Rice
+Salad
+
+Evening Snack:
+Banana
+
+==================================================
+3. FIX THE FIRESTORE SEEDING
+==================================================
+
+Do NOT rely on a one-time "first launch" condition if that is why the meals are missing.
+
+Inspect the current Firestore meals collection.
+
+If the required weekday meals do not exist, automatically create them.
+
+The seed must be SAFE and IDEMPOTENT.
+
+That means:
+
+- Running the seed multiple times must NOT create duplicates.
+- Use deterministic document IDs.
+- Example:
+
+monday-breakfast
+monday-morning-snack
+monday-lunch
+monday-afternoon-snack
+monday-dinner
+monday-evening-snack
+
+Then:
+
+tuesday-breakfast
+tuesday-morning-snack
+etc.
+
+Do NOT use random IDs for the default recurring meals.
+
+Before finishing, VERIFY IN FIRESTORE that all 42 documents actually exist.
+
+Do not just say they were seeded.
+
+Actually verify the data.
+
+==================================================
+4. FIRESTORE DATA MODEL
+==================================================
+
+Each meal should contain something similar to:
+
+{
+  id,
+  dayOfWeek,
+  mealType,
+  name,
+  foods,
+  time,
+  reminderEnabled,
+  icon,
+  notes
+}
+
+Example:
+
+{
+  id: "monday-breakfast",
+  dayOfWeek: "monday",
+  mealType: "breakfast",
+  name: "Breakfast",
+  foods: [
+    "2 eggs",
+    "Oatmeal with milk",
+    "Banana"
+  ],
+  time: "07:30",
+  reminderEnabled: true
+}
+
+IMPORTANT:
+
+There must NOT be a "date" field used to define the recurring meal.
+
+Use:
+
+dayOfWeek
+
+for the recurring template.
+
+==================================================
+5. MEAL PLAN SCREEN
+==================================================
+
+The screen must show:
+
+MON
+TUE
+WED
+THU
+FRI
+SAT
+SUN
+
+NO NUMBERS.
+
+NO:
+
+10
+11
+12
+13
+14
+15
+16
+
+NO calendar dates.
+
+When I tap Monday:
+
+Show all 6 Monday meals.
+
+When I tap Tuesday:
+
+Show all 6 Tuesday meals.
+
+etc.
+
+The selected day should have the green selected style.
+
+==================================================
+6. CUSTOM MEALS MUST ALSO REPEAT EVERY WEEK
+==================================================
+
+This is VERY IMPORTANT.
+
+If I add my own meal:
+
+Day:
+Monday
+
+Meal:
+Morning Snack
+
+Time:
+11:00 AM
+
+Food:
+Apple + yogurt
+
+Reminder:
+ON
+
+That meal becomes part of the Monday weekly template.
+
+It must automatically appear:
+
+This Monday
+Next Monday
+Every Monday after that
+
+until I edit or delete it.
+
+It must NOT disappear after one day.
+
+It must NOT be attached to today's date.
+
+==================================================
+7. EDITING CUSTOM MEALS
+==================================================
+
+If I edit:
+
+Monday → Breakfast → 7:30 AM
+
+to:
+
+Monday → Breakfast → 8:00 AM
+
+the recurring Monday breakfast becomes 8:00 AM every Monday.
+
+If I change:
+
+Monday → Breakfast
+
+to:
+
+Tuesday → Breakfast
+
+move the recurring template from Monday to Tuesday.
+
+==================================================
+8. DELETE
+==================================================
+
+If I delete:
+
+Monday Dinner
+
+it should disappear from the Monday weekly template.
+
+It should NOT affect Tuesday, Wednesday, Thursday, Friday, Saturday, or Sunday.
+
+==================================================
+9. COMPLETION TRACKING MUST BE SEPARATE
+==================================================
+
+The MEAL itself is recurring.
+
+The COMPLETION is daily.
+
+Example:
+
+Monday Breakfast exists every Monday.
+
+If I check it as completed today:
+
+Only today's completion should be marked.
+
+Next Monday:
+
+Monday Breakfast must automatically be incomplete again.
+
+Do NOT store "completed" permanently on the recurring meal document.
+
+Use a separate completion system keyed by actual date.
+
+Example concept:
+
+completion:
+
+2026-08-10:
+  monday-breakfast: true
+
+This is only completion history.
+
+The recurring meal remains:
+
+monday-breakfast
+
+==================================================
+10. HOME PAGE
+==================================================
+
+The Home page should automatically detect today's weekday.
+
+If today is Monday:
+
+Show today's Monday meals.
+
+If today is Tuesday:
+
+Show today's Tuesday meals.
+
+etc.
+
+Do NOT break this functionality.
+
+==================================================
+11. NOTIFICATIONS
+==================================================
+
+Keep the existing Firebase/FCM notification system.
+
+Do NOT remove it.
+
+Notifications must also use the recurring weekday meal.
+
+Example:
+
+Monday Breakfast
+07:30
+Reminder ON
+
+This means:
+
+Every Monday at 07:30.
+
+If I add:
+
+Thursday Afternoon Snack
+16:30
+Reminder ON
+
+then send the notification every Thursday at 16:30.
+
+If I turn Reminder OFF:
+
+Do not send that meal's notification.
+
+If I edit the time:
+
+Update the recurring notification.
+
+If I delete the meal:
+
+Remove its notification.
+
+==================================================
+12. VERY IMPORTANT: DON'T DESTROY EXISTING DATA
+==================================================
+
+Do NOT blindly delete the Firestore meals collection.
+
+First inspect the current data.
+
+Old date-based documents can remain if necessary, but the application must completely ignore them.
+
+The new weekday documents must be created correctly.
+
+Do not lose custom meals that already exist unless they are clearly invalid old test data.
+
+==================================================
+13. FIX THE SEEDING BUG PROPERLY
+==================================================
+
+Find out why the current seed did not populate the 42 meals.
+
+Check:
+
+useMeals.ts
+
+Firestore initialization
+
+Firestore rules
+
+Firebase configuration
+
+collection name
+
+document IDs
+
+dayOfWeek values
+
+query filters
+
+authentication/permissions
+
+Any existing "hasSeeded" or localStorage flag
+
+If a localStorage flag is preventing the seed from running, fix it.
+
+Do not simply tell me to clear my browser.
+
+The application itself should handle missing seed data safely.
+
+==================================================
+14. MIGRATION
+==================================================
+
+If the old database contains date-based meals such as:
+
+2024-01-15-breakfast
+
+do NOT use those for the new Meal Plan.
+
+The new system must use weekday IDs.
+
+If safe, migrate the old default meals into the new weekday structure.
+
+Otherwise, create the 42 correct weekday documents.
+
+==================================================
+15. VERIFY BEFORE FINISHING
+==================================================
+
+Do not finish by saying:
+
+"The meals will appear after first launch."
+
+Actually verify that they appear.
+
+Test:
+
+Monday → 6 meals
+
+Tuesday → 6 meals
+
+Wednesday → 6 meals
+
+Thursday → 6 meals
+
+Friday → 6 meals
+
+Saturday → 6 meals
+
+Sunday → 6 meals
+
+Total:
+
+42 default recurring meals.
+
+Then test:
+
+Add custom meal to Monday.
+
+Refresh app.
+
+Monday still shows the custom meal.
+
+Switch to Tuesday.
+
+Custom Monday meal should NOT appear.
+
+Next week Monday.
+
+The custom Monday meal should still exist.
+
+Edit custom meal.
+
+Refresh.
+
+The edited meal should still exist.
+
+Delete custom meal.
+
+Refresh.
+
+It should remain deleted.
+
+Test notification setting for the custom meal.
+
+Make sure the notification is associated with the recurring weekday.
+
+==================================================
+16. DO NOT CHANGE THE DESIGN
+==================================================
+
+Keep the current dark UI.
+
+Keep:
+
+Home
+Meals
+Habits
+Progress
+Settings
+
+Keep the current bottom navigation.
+
+Keep the current visual style.
+
+Only fix the Meal Plan data and recurring logic.
+
+==================================================
+FINAL REQUIREMENT
+==================================================
+
+When you finish, the Meal Plan screen must immediately show my complete weekly plan.
+
+It should look like:
+
+MON   TUE   WED   THU   FRI   SAT   SUN
+
+Then, for example, selecting Monday should show:
+
+Breakfast
+2 eggs
+Oatmeal with milk
+Banana
+
+Morning Snack
+3–4 fresh rutab
+Handful of walnuts
+
+Lunch
+Grilled chicken
+Rice
+Broccoli
+
+Afternoon Snack
+Greek yogurt
+
+Dinner
+Salmon
+Sweet potato
+Salad
+
+Evening Snack
+Cottage cheese
+
+No "No meals planned" message should appear for any of the seven default days.
+
+Do the implementation, run the production build, verify Firestore contains the meals, and verify the UI displays them before telling me the task is complete.

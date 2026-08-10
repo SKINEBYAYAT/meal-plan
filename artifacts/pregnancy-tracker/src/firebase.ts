@@ -1,5 +1,4 @@
 import { initializeApp } from 'firebase/app';
-import { getMessaging, getToken } from 'firebase/messaging';
 import { getFirestore } from 'firebase/firestore';
 
 const firebaseConfig = {
@@ -13,16 +12,34 @@ const firebaseConfig = {
 
 const VAPID_KEY = 'BAZFsFhWDAnDyY0nHU0Jkp1DaK112_DEesqjQ4B5fN8MFNp7vcWtqdU9Na3wSRzKdQW6RJLv-_L66kjhizTjfGc';
 
-
 const app = initializeApp(firebaseConfig);
-const messaging = getMessaging(app);
+
+// Firestore is always available — init eagerly.
 export const db = getFirestore(app);
+
+// Messaging is only available in browsers that support Service Workers + Push.
+// We lazy-load it so a crash here never blocks db or the rest of the app.
+let _messagingReady: Promise<import('firebase/messaging').Messaging | null> | null = null;
+
+function getMessagingLazy(): Promise<import('firebase/messaging').Messaging | null> {
+  if (_messagingReady) return _messagingReady;
+  _messagingReady = (async () => {
+    try {
+      const { getMessaging, isSupported } = await import('firebase/messaging');
+      if (!(await isSupported())) return null;
+      return getMessaging(app);
+    } catch {
+      return null;
+    }
+  })();
+  return _messagingReady;
+}
 
 /**
  * Requests notification permission and returns the FCM registration token.
- * Returns null if permission is denied or an error occurs.
+ * Returns null if permission is denied, browser unsupported, or an error occurs.
  */
-export async function requestNotificationPermission() {
+export async function requestNotificationPermission(): Promise<string | null> {
   try {
     const permission = await Notification.requestPermission();
     if (permission !== 'granted') {
@@ -30,6 +47,13 @@ export async function requestNotificationPermission() {
       return null;
     }
 
+    const messaging = await getMessagingLazy();
+    if (!messaging) {
+      console.warn('[FCM] Messaging not supported in this browser.');
+      return null;
+    }
+
+    const { getToken } = await import('firebase/messaging');
     const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
     const token = await getToken(messaging, {
       vapidKey: VAPID_KEY,

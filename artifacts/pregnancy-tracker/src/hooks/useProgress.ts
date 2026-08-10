@@ -1,7 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../firebase';
-import { useMeals } from './useMeals';
+import { useMeals, getMealCountByDay } from './useMeals';
 import { useHabits } from './useHabits';
 import { getFromStorage, setToStorage, STREAKS_KEY, COMPLETIONS_KEY } from '../lib/storage';
 import { DayOfWeek, Meal, StreakData } from '../types';
@@ -79,46 +77,35 @@ export function useProgress(date: string) {
   }, [completedTasks, totalTasks, date, streakData]);
 
   // ── 3-month heatmap ─────────────────────────────────────────────────────────
-  // Strategy: load all meal templates from Firestore once → count per weekday.
-  // Then for each calendar date, compare against localStorage completion history.
+  // Read meal counts per weekday from localStorage (no Firestore needed).
   useEffect(() => {
     const end = new Date();
     const start = new Date();
     start.setMonth(start.getMonth() - 3);
 
-    getDocs(collection(db, 'meals'))
-      .then((snapshot) => {
-        // Count how many template meals exist per day of week
-        const countByDow: Partial<Record<DayOfWeek, number>> = {};
-        snapshot.docs.forEach((d) => {
-          const meal = d.data() as Meal;
-          countByDow[meal.day] = (countByDow[meal.day] ?? 0) + 1;
-        });
+    const countByDow = getMealCountByDay();
+    const completions = getFromStorage<Record<string, string[]>>(COMPLETIONS_KEY, {});
 
-        const completions = getFromStorage<Record<string, string[]>>(COMPLETIONS_KEY, {});
-
-        const data: HeatmapEntry[] = [];
-        const curr = new Date(start);
-        while (curr <= end) {
-          const dStr = curr.toISOString().split('T')[0];
-          const dow = dateToDow(dStr);
-          const tMeals = countByDow[dow] ?? 0;
-          const cMeals = completions[dStr]?.length ?? 0;
-          const hLogs = allLogs[dStr] ?? [];
-          const tTasks = tMeals + activeHabits.length;
-          const cTasks = cMeals + hLogs.filter((l) => l.completed).length;
-          const pct = tTasks === 0 ? 0 : (cTasks / tTasks) * 100;
-          let intensity = 0;
-          if (pct > 0)   intensity = 1;
-          if (pct > 30)  intensity = 2;
-          if (pct > 70)  intensity = 3;
-          if (pct === 100) intensity = 4;
-          data.push({ date: dStr, intensity, pct });
-          curr.setDate(curr.getDate() + 1);
-        }
-        setHeatmapData(data);
-      })
-      .catch((err) => console.error('[useProgress] heatmap query failed', err));
+    const data: HeatmapEntry[] = [];
+    const curr = new Date(start);
+    while (curr <= end) {
+      const dStr = curr.toISOString().split('T')[0];
+      const dow = dateToDow(dStr);
+      const tMeals = countByDow[dow] ?? 0;
+      const cMeals = completions[dStr]?.length ?? 0;
+      const hLogs = allLogs[dStr] ?? [];
+      const tTasks = tMeals + activeHabits.length;
+      const cTasks = cMeals + hLogs.filter((l) => l.completed).length;
+      const pct = tTasks === 0 ? 0 : (cTasks / tTasks) * 100;
+      let intensity = 0;
+      if (pct > 0)   intensity = 1;
+      if (pct > 30)  intensity = 2;
+      if (pct > 70)  intensity = 3;
+      if (pct === 100) intensity = 4;
+      data.push({ date: dStr, intensity, pct });
+      curr.setDate(curr.getDate() + 1);
+    }
+    setHeatmapData(data);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // load once on mount
 
