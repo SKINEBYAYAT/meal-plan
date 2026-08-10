@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Link } from 'wouter';
-import { MEALS_KEY, HABITS_KEY, HABIT_LOGS_KEY, STREAKS_KEY, SETTINGS_KEY } from '../lib/storage';
+import { MEAL_PLAN_KEY, COMPLETIONS_KEY, HABITS_KEY, HABIT_LOGS_KEY, STREAKS_KEY, SETTINGS_KEY } from '../lib/storage';
 
 export default function SettingsPage() {
   const { settings, updateSettings } = useSettings();
@@ -26,7 +26,8 @@ export default function SettingsPage() {
 
   const exportData = () => {
     const data = {
-      meals: localStorage.getItem(MEALS_KEY),
+      mealPlan: localStorage.getItem(MEAL_PLAN_KEY),
+      mealCompletions: localStorage.getItem(COMPLETIONS_KEY),
       habits: localStorage.getItem(HABITS_KEY),
       logs: localStorage.getItem(HABIT_LOGS_KEY),
       streaks: localStorage.getItem(STREAKS_KEY),
@@ -47,7 +48,10 @@ export default function SettingsPage() {
     reader.onload = (ev) => {
       try {
         const data = JSON.parse(ev.target?.result as string);
-        if (data.meals) localStorage.setItem(MEALS_KEY, data.meals);
+        // New key format (backups created after Task #7)
+        if (data.mealPlan) localStorage.setItem(MEAL_PLAN_KEY, data.mealPlan);
+        if (data.mealCompletions) localStorage.setItem(COMPLETIONS_KEY, data.mealCompletions);
+        // Habits / streaks / settings are key-stable
         if (data.habits) localStorage.setItem(HABITS_KEY, data.habits);
         if (data.logs) localStorage.setItem(HABIT_LOGS_KEY, data.logs);
         if (data.streaks) localStorage.setItem(STREAKS_KEY, data.streaks);
@@ -257,9 +261,13 @@ export default function SettingsPage() {
             <button
               onClick={() => {
                 if (confirm('Delete all data? This cannot be undone.')) {
-                  [MEALS_KEY, HABITS_KEY, HABIT_LOGS_KEY, STREAKS_KEY, SETTINGS_KEY].forEach((k) =>
-                    localStorage.removeItem(k),
-                  );
+                  [
+                    MEAL_PLAN_KEY, COMPLETIONS_KEY,
+                    HABITS_KEY, HABIT_LOGS_KEY, STREAKS_KEY, SETTINGS_KEY,
+                    // also clear any legacy keys that may still be present
+                    'pregnancy_tracker_meals_v2', 'pregnancy_tracker_meals',
+                    'pregnancy_tracker_completions',
+                  ].forEach((k) => localStorage.removeItem(k));
                   window.location.reload();
                 }
               }}

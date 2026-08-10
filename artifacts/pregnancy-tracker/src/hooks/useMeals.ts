@@ -38,7 +38,35 @@ function seedIfNeeded(): void {
   }
 }
 
-// Runs once when the module is first imported
+// ─── One-time migration from previous storage keys ────────────────────────────
+// If an earlier session stored meals under the old key, carry those over so
+// custom edits are not lost on upgrade. Runs only when the new key is empty.
+function migrateFromLegacyKey(): void {
+  const LEGACY_KEYS = [
+    'pregnancy_tracker_meals_v2', // key used before Task #7
+    'pregnancy_tracker_meals',    // even older key
+  ];
+  // Only migrate if the new key has no data yet
+  if (localStorage.getItem(MEAL_PLAN_KEY)) return;
+  for (const legacyKey of LEGACY_KEYS) {
+    const raw = localStorage.getItem(legacyKey);
+    if (!raw) continue;
+    try {
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+        localStorage.setItem(MEAL_PLAN_KEY, raw);
+        localStorage.removeItem(legacyKey);
+        console.log(`[useMeals] Migrated meal data from '${legacyKey}' → '${MEAL_PLAN_KEY}'.`);
+      }
+    } catch {
+      // corrupt data — skip, let the seed run
+    }
+    break; // only migrate from the first non-empty legacy key found
+  }
+}
+
+// Runs once when the module is first imported — migrate first, then seed
+migrateFromLegacyKey();
 seedIfNeeded();
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
