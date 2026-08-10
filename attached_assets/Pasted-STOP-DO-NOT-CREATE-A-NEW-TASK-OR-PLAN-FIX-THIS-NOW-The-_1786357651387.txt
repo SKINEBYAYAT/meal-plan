@@ -1,0 +1,238 @@
+STOP. DO NOT CREATE A NEW TASK OR PLAN. FIX THIS NOW.
+
+The Meal Plan screen STILL shows:
+
+"No meals planned"
+
+for every day.
+
+I do NOT want another explanation about localStorage, Firebase, Firestore, seeding, or database migration.
+
+I want the meals VISIBLY RENDERED IN THE APP.
+
+The browser is showing the old empty state even though you claim "42 meals are live".
+
+==================================================
+THE REQUIRED FIX
+==================================================
+
+Make the built-in weekly meal plan the FALLBACK SOURCE OF TRUTH.
+
+The Meal Plan must NEVER depend on localStorage being populated before it can render.
+
+In useMeals.ts:
+
+1. Import DEFAULT_WEEKLY_MEALS directly from:
+
+src/data/defaultMeals.ts
+
+2. Initialize the React state DIRECTLY with DEFAULT_WEEKLY_MEALS.
+
+For example conceptually:
+
+const [meals, setMeals] = useState<Meal[]>(DEFAULT_WEEKLY_MEALS);
+
+DO NOT initialize it as:
+
+useState([])
+
+and wait for localStorage.
+
+3. Read localStorage only AFTER the default meals are already available.
+
+If localStorage contains valid custom/user meal data, merge/use it.
+
+If localStorage is empty, invalid, corrupted, or missing:
+
+USE DEFAULT_WEEKLY_MEALS IMMEDIATELY.
+
+4. Save the defaults to localStorage afterward.
+
+But the UI must already have the meals before that happens.
+
+==================================================
+VERY IMPORTANT: FIX THE DAY FILTER
+==================================================
+
+Inspect meals.tsx and useMeals.tsx.
+
+The UI must filter using EXACTLY the same property used by DEFAULT_WEEKLY_MEALS.
+
+If the data uses:
+
+dayOfWeek: "monday"
+
+then the UI must query:
+
+meal.dayOfWeek === "monday"
+
+NOT:
+
+meal.day
+NOT:
+meal.date
+NOT:
+meal.weekday
+
+Make sure all seven values are exactly:
+
+monday
+tuesday
+wednesday
+thursday
+friday
+saturday
+sunday
+
+Lowercase.
+
+==================================================
+VERIFY THE DEFAULT DATA
+==================================================
+
+Put a temporary console log directly where the Meal Plan renders:
+
+console.log("MEAL DEBUG", {
+  totalMeals: meals.length,
+  selectedDay,
+  matchingMeals: meals.filter(m => m.dayOfWeek === selectedDay)
+});
+
+I expect:
+
+totalMeals: 42
+
+when the app starts.
+
+For Monday:
+
+matchingMeals: 6
+
+For Tuesday:
+
+matchingMeals: 6
+
+etc.
+
+DO NOT remove this until you have verified the problem.
+
+==================================================
+IMPORTANT: DO NOT TRUST THE EXISTING LOCALSTORAGE
+==================================================
+
+The Rapid browser may already have an old empty:
+
+pregnancy-meal-plan
+
+localStorage value.
+
+That could be why it keeps showing:
+
+"No meals planned"
+
+even though the source code now contains 42 meals.
+
+Add a safe migration:
+
+If the existing localStorage meal array is empty:
+
+REPLACE it with DEFAULT_WEEKLY_MEALS.
+
+If it contains an old broken format:
+
+migrate/replace it with DEFAULT_WEEKLY_MEALS.
+
+Do NOT let an old empty array override the built-in meals.
+
+==================================================
+I WANT THE UI TO RENDER THIS DIRECTLY
+==================================================
+
+When I open Meals and Monday is selected, I MUST immediately see:
+
+Breakfast
+2 eggs
+Oatmeal with milk
+Banana
+
+Morning Snack
+3–4 fresh rutab
+Handful of walnuts
+
+Lunch
+Grilled chicken
+Rice
+Broccoli
+
+Afternoon Snack
+Greek yogurt
+
+Dinner
+Salmon
+Sweet potato
+Salad
+
+Evening Snack
+Cottage cheese
+
+Then when I tap Tuesday I must see the Tuesday meals.
+
+Do NOT show:
+
+"No meals planned"
+
+for any of the seven default days.
+
+==================================================
+DO NOT CHANGE ANYTHING ELSE
+==================================================
+
+DO NOT TOUCH:
+
+Firebase
+Firestore
+FCM
+Notifications
+Settings
+Habits
+Progress
+Bottom navigation
+UI design
+Colors
+Icons
+Vercel
+GitHub
+
+The ONLY problem to fix is:
+
+DEFAULT_WEEKLY_MEALS exists in the code, but the Meal Plan UI is still rendering an empty array.
+
+==================================================
+FINAL VERIFICATION
+==================================================
+
+After fixing:
+
+1. Clear/reload the app state if necessary.
+2. Open Meals.
+3. Verify Monday visually.
+4. Tap Tuesday and verify.
+5. Tap Wednesday.
+6. Tap Thursday.
+7. Tap Friday.
+8. Tap Saturday.
+9. Tap Sunday.
+
+Every day must show 6 meals.
+
+Also verify in the browser console:
+
+totalMeals === 42
+
+and each day has 6 matching meals.
+
+DO NOT TELL ME "42 MEALS ARE LIVE" BASED ON A CODE CHECK.
+
+I need the ACTUAL UI to show the meals in the Rapid browser.
+
+Only stop after visually confirming the Meal Plan screen displays the meals.
