@@ -1,0 +1,1 @@
+- [PWA service worker caching](pwa-sw-caching.md) — keep SW network-first; cache-first served stale builds on phones ("No meals planned" despite fixed code). Bump pnt-vN to purge.
