@@ -5,7 +5,6 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { Route, Switch, Router as WouterRouter, Link, useLocation } from 'wouter';
 import { Home, Calendar, CheckSquare, BarChart3, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { notificationScheduler } from '@/lib/notifications';
 
 // Pages
 import HomePage from '@/pages/home';
@@ -95,11 +94,6 @@ function NotificationMessageBridge() {
 // ─── Router ───────────────────────────────────────────────────────────────────
 
 function Router() {
-  // Initialise notification scheduler once, silently
-  useEffect(() => {
-    void notificationScheduler.init();
-  }, []);
-
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#0D1117]">
       <NotificationMessageBridge />

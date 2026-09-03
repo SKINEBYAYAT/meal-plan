@@ -17,4 +17,30 @@
 //   export type InsertPost = z.infer<typeof insertPostSchema>;
 //   export type Post = typeof postsTable.$inferSelect;
 
-export {}
+import { boolean, pgTable, text, timestamp, unique } from 'drizzle-orm/pg-core';
+
+export const pushDevices = pgTable('push_devices', {
+	deviceId: text('device_id').primaryKey(),
+	endpoint: text('endpoint').notNull().unique(),
+	p256dh: text('p256dh').notNull(),
+	auth: text('auth').notNull(),
+	masterEnabled: boolean('master_enabled').notNull().default(false),
+	updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const mealReminders = pgTable('meal_reminders', {
+	id: text('id').primaryKey(),
+	deviceId: text('device_id').notNull().references(() => pushDevices.deviceId, { onDelete: 'cascade' }),
+	mealId: text('meal_id').notNull(),
+	weekday: text('weekday').notNull(),
+	time: text('time').notNull(),
+	title: text('title').notNull(),
+	foods: text('foods').notNull(),
+	icon: text('icon').notNull().default('🥘'),
+	enabled: boolean('enabled').notNull().default(false),
+	lastSentDate: text('last_sent_date'),
+	lastSentTime: text('last_sent_time'),
+	updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+	deviceMeal: unique('meal_reminders_device_meal').on(table.deviceId, table.mealId),
+}));

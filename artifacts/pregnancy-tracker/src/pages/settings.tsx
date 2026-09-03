@@ -2,12 +2,11 @@ import { useSettings } from '../hooks/useSettings';
 import { useNotifications } from '../hooks/useNotifications';
 import { getAllMealsByDay } from '../hooks/useMeals';
 import {
-  getStoredFcmToken,
-  requestNotificationPermission,
+  requestPushSubscription,
   setMasterReminder,
   sendRemoteTestNotification,
   syncMealReminder,
-} from '../firebase';
+} from '../push';
 import { Bell, User, Heart, Download, Upload, Trash2, ChevronRight, Bug } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
@@ -100,14 +99,14 @@ export default function SettingsPage() {
     if (checked && permission !== 'granted') {
       const granted = await requestPermission();
       if (granted) {
-        const token = getStoredFcmToken() ?? await requestNotificationPermission();
-        if (!token) {
-          toast({ title: 'Notifications unavailable', description: 'FCM could not register this device.', variant: 'destructive' });
+        const subscription = await requestPushSubscription();
+        if (!subscription) {
+          toast({ title: 'Notifications unavailable', description: 'Web Push could not register this device.', variant: 'destructive' });
           return;
         }
         await Promise.all(Object.values(getAllMealsByDay()).flat()
           .filter((meal) => meal.reminderEnabled)
-          .map((meal) => syncMealReminder(meal, token)));
+          .map((meal) => syncMealReminder(meal)));
         await setMasterReminder(true);
         updateSettings({ notificationsEnabled: true });
         toast({ title: 'Meal reminders enabled', description: 'Only meals with Reminder ON will notify.' });
@@ -128,13 +127,14 @@ export default function SettingsPage() {
   };
 
   const handleTestNotification = useCallback(async () => {
-    const token = getStoredFcmToken() ?? await requestNotificationPermission();
-    if (!token) {
+    try {
+      await requestPushSubscription();
+    } catch (error) {
       toast({ title: 'Could not enable reminders', description: 'Grant notification permission first.', variant: 'destructive' });
       return;
     }
     try {
-      await sendRemoteTestNotification(token);
+      await sendRemoteTestNotification();
       toast({ title: 'Test notification sent', description: 'Check your notification tray.' });
     } catch (err) {
       console.error('[Settings] Failed to send test notification:', err);
@@ -199,7 +199,7 @@ export default function SettingsPage() {
             </div>
 
             <div className="p-4 grid grid-cols-2 gap-x-4 gap-y-2 text-xs text-gray-400">
-              <span>Push notifications</span><strong className="text-right text-gray-200">{isSupported && permission === 'granted' && swStatus === 'registered' && getStoredFcmToken() ? 'Ready' : 'Not ready'}</strong>
+              <span>Push notifications</span><strong className="text-right text-gray-200">{isSupported && permission === 'granted' && swStatus === 'registered' ? 'Ready' : 'Not ready'}</strong>
               <span>Next reminder</span><strong className="text-right text-gray-200">{nextReminderLabel(settings.notificationsEnabled)}</strong>
             </div>
 

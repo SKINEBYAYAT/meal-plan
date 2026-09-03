@@ -77,7 +77,7 @@ export function useProgress(date: string) {
   }, [completedTasks, totalTasks, date, streakData]);
 
   // ── 3-month heatmap ─────────────────────────────────────────────────────────
-  // Read meal counts per weekday from localStorage (no Firestore needed).
+  // Read meal counts per weekday from localStorage.
   useEffect(() => {
     const end = new Date();
     const start = new Date();

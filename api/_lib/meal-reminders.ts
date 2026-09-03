@@ -1,146 +1,140 @@
-import { cert, getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
-import { getMessaging } from 'firebase-admin/messaging';
-
-export const TIMEZONE = 'Asia/Beirut';
-export const REMINDERS_COLLECTION = 'reminders';
+import { Pool } from 'pg';
+import webpush from 'web-push';
 
 type DayOfWeek = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
-
+type Subscription = { endpoint: string; keys: { p256dh: string; auth: string } };
 type Reminder = {
-  deviceId: string;
-  token: string;
-  mealId: string;
-  weekday: DayOfWeek;
-  time: string;
-  title: string;
-  foods: string[];
-  icon?: string;
-  enabled: boolean;
-  lastSentDate?: string;
-  lastSentTime?: string;
-  processingKey?: string;
+  id: string; device_id: string; meal_id: string; weekday: DayOfWeek; time: string;
+  title: string; foods: string[]; icon: string; enabled: boolean;
+  last_sent_date: string | null; last_sent_time: string | null;
+  endpoint: string; p256dh: string; auth: string;
 };
 
-function getAdminApp() {
-  if (getApps().length) return getApps()[0];
-  const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
-  if (!process.env.FIREBASE_PROJECT_ID || !process.env.FIREBASE_CLIENT_EMAIL || !privateKey) {
-    throw new Error('Firebase Admin configuration is missing FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, or FIREBASE_PRIVATE_KEY.');
-  }
-  return initializeApp({
-    credential: cert({
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey,
-    }),
-  });
+const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
+let tablesReady: Promise<void> | undefined;
+
+function env(name: string): string {
+  const value = process.env[name];
+  if (!value) throw new Error(`Missing environment variable: ${name}`);
+  return value;
+}
+
+async function ensureTables(): Promise<void> {
+  if (!tablesReady) tablesReady = (async () => {
+    await pool.query(`CREATE TABLE IF NOT EXISTS push_devices (
+      device_id text PRIMARY KEY, endpoint text NOT NULL UNIQUE, p256dh text NOT NULL,
+      auth text NOT NULL, master_enabled boolean NOT NULL DEFAULT false,
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )`);
+    await pool.query(`CREATE TABLE IF NOT EXISTS meal_reminders (
+      id text PRIMARY KEY, device_id text NOT NULL REFERENCES push_devices(device_id) ON DELETE CASCADE,
+      meal_id text NOT NULL, weekday text NOT NULL, time text NOT NULL, title text NOT NULL,
+      foods text NOT NULL, icon text NOT NULL DEFAULT '🥘', enabled boolean NOT NULL DEFAULT false,
+      last_sent_date text, last_sent_time text, updated_at timestamptz NOT NULL DEFAULT now(),
+      UNIQUE(device_id, meal_id)
+    )`);
+  })();
+  await tablesReady;
+}
+
+function configurePush(): void {
+  webpush.setVapidDetails(env('VAPID_SUBJECT'), env('VAPID_PUBLIC_KEY'), env('VAPID_PRIVATE_KEY'));
+}
+
+export function assertCronSecret(authorization: string | undefined): void {
+  if (!process.env.CRON_SECRET || authorization !== `Bearer ${process.env.CRON_SECRET}`) throw new Error('Unauthorized');
+}
+
+export function describeError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  if (message === 'Unauthorized') return 'Unauthorized cron request.';
+  if (message.includes('410') || message.includes('404')) return 'Push subscription is expired or no longer registered.';
+  return message;
+}
+
+export async function syncReminder(input: {
+  deviceId: string; subscription: Subscription; mealId: string; weekday: DayOfWeek; time: string;
+  title: string; foods: string[]; icon?: string; enabled: boolean;
+}): Promise<void> {
+  await ensureTables();
+  await pool.query(`INSERT INTO push_devices (device_id, endpoint, p256dh, auth, updated_at)
+    VALUES ($1, $2, $3, $4, now()) ON CONFLICT (device_id) DO UPDATE SET
+    endpoint = EXCLUDED.endpoint, p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth, updated_at = now()`,
+    [input.deviceId, input.subscription.endpoint, input.subscription.keys.p256dh, input.subscription.keys.auth]);
+  await pool.query(`INSERT INTO meal_reminders
+    (id, device_id, meal_id, weekday, time, title, foods, icon, enabled, updated_at)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now()) ON CONFLICT (id) DO UPDATE SET
+    weekday = EXCLUDED.weekday, time = EXCLUDED.time, title = EXCLUDED.title, foods = EXCLUDED.foods,
+    icon = EXCLUDED.icon, enabled = EXCLUDED.enabled, updated_at = now()`,
+    [`${input.deviceId}__${input.mealId}`, input.deviceId, input.mealId, input.weekday, input.time,
+      input.title, JSON.stringify(input.foods), input.icon ?? '🥘', input.enabled]);
+}
+
+export async function removeReminder(deviceId: string, mealId: string): Promise<void> {
+  await ensureTables();
+  await pool.query('DELETE FROM meal_reminders WHERE device_id = $1 AND meal_id = $2', [deviceId, mealId]);
+}
+
+export async function setMaster(deviceId: string, subscription: Subscription, enabled: boolean): Promise<void> {
+  await ensureTables();
+  await pool.query(`INSERT INTO push_devices (device_id, endpoint, p256dh, auth, master_enabled, updated_at)
+    VALUES ($1, $2, $3, $4, $5, now()) ON CONFLICT (device_id) DO UPDATE SET
+    endpoint = EXCLUDED.endpoint, p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth,
+    master_enabled = EXCLUDED.master_enabled, updated_at = now()`,
+    [deviceId, subscription.endpoint, subscription.keys.p256dh, subscription.keys.auth, enabled]);
 }
 
 function currentBeirut(): { weekday: DayOfWeek; date: string; time: string } {
   const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: TIMEZONE, weekday: 'long', year: 'numeric', month: '2-digit', day: '2-digit',
+    timeZone: 'Asia/Beirut', weekday: 'long', year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit', hour12: false,
   }).formatToParts(new Date());
   const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return {
-    weekday: values.weekday.toLowerCase() as DayOfWeek,
-    date: `${values.year}-${values.month}-${values.day}`,
-    time: `${values.hour === '24' ? '00' : values.hour}:${values.minute}`,
-  };
+  return { weekday: values.weekday.toLowerCase() as DayOfWeek, date: `${values.year}-${values.month}-${values.day}`,
+    time: `${values.hour === '24' ? '00' : values.hour}:${values.minute}` };
 }
 
-function isDue(reminder: Reminder, time: string): boolean {
-  const [hour, minute] = reminder.time.split(':').map(Number);
-  const [currentHour, currentMinute] = time.split(':').map(Number);
-  return Math.abs(hour * 60 + minute - currentHour * 60 - currentMinute) <= 1;
-}
-
-function errorCode(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-export function assertCronSecret(authorization: string | undefined): void {
-  const expected = process.env.CRON_SECRET;
-  if (!expected || authorization !== `Bearer ${expected}`) throw new Error('Unauthorized');
+function due(reminder: Reminder, now: string): boolean {
+  const [h, m] = reminder.time.split(':').map(Number);
+  const [nh, nm] = now.split(':').map(Number);
+  return Math.abs(h * 60 + m - nh * 60 - nm) <= 1;
 }
 
 export async function processDueReminders(): Promise<number> {
-  const app = getAdminApp();
-  const db = getFirestore(app);
-  const messaging = getMessaging(app);
+  await ensureTables();
+  configurePush();
   const current = currentBeirut();
-  const snapshot = await db.collection(REMINDERS_COLLECTION)
-    .where('enabled', '==', true)
-    .where('weekday', '==', current.weekday)
-    .get();
+  const { rows } = await pool.query<Reminder>(`SELECT r.*, d.endpoint, d.p256dh, d.auth
+    FROM meal_reminders r JOIN push_devices d ON d.device_id = r.device_id
+    WHERE r.enabled = true AND d.master_enabled = true AND r.weekday = $1`, [current.weekday]);
   let processed = 0;
-
-  for (const reminderDoc of snapshot.docs) {
-    const reminder = reminderDoc.data() as Reminder;
-    const device = await db.collection('devices').doc(reminder.deviceId).get();
-    if (device.data()?.masterEnabled !== true || !isDue(reminder, current.time)) continue;
-
-    const claimed = await db.runTransaction(async (transaction) => {
-      const fresh = await transaction.get(reminderDoc.ref);
-      const latest = fresh.data() as Reminder | undefined;
-      const processingKey = `${current.date}__${latest?.time}`;
-      if (!fresh.exists || !latest?.enabled || latest.lastSentDate === current.date && latest.lastSentTime === latest.time || latest.processingKey === processingKey) return false;
-      transaction.update(reminderDoc.ref, {
-        processingKey,
-        lastAttemptedAt: FieldValue.serverTimestamp(),
-      });
-      return true;
-    });
-    if (!claimed) continue;
-
-    const title = `${reminder.icon ?? '🥘'} ${reminder.title}`;
+  for (const reminder of rows) {
+    if (!due(reminder, current.time) || (reminder.last_sent_date === current.date && reminder.last_sent_time === reminder.time)) continue;
+    const claim = await pool.query(`UPDATE meal_reminders SET last_sent_date = $1, last_sent_time = $2
+      WHERE id = $3 AND NOT (last_sent_date = $1 AND last_sent_time = $2) RETURNING id`, [current.date, reminder.time, reminder.id]);
+    if (!claim.rowCount) continue;
     const body = ["Today's meal:", ...reminder.foods.map((food) => `• ${food}`)].join('\n');
     try {
-      await messaging.send({
-        token: reminder.token,
-        data: { mealId: reminder.mealId, title, body },
-        webpush: { fcmOptions: { link: `/meals?highlight=${encodeURIComponent(reminder.mealId)}` } },
-      });
-      await reminderDoc.ref.update({
-        lastSentDate: current.date,
-        lastSentTime: reminder.time,
-        lastSentAt: FieldValue.serverTimestamp(),
-        lastError: FieldValue.delete(),
-        processingKey: FieldValue.delete(),
-      });
+      await webpush.sendNotification({ endpoint: reminder.endpoint, keys: { p256dh: reminder.p256dh, auth: reminder.auth } }, JSON.stringify({
+        title: `${reminder.icon} ${reminder.title}`, body, mealId: reminder.meal_id,
+      }));
+      await pool.query('UPDATE meal_reminders SET updated_at = now() WHERE id = $1', [reminder.id]);
       processed += 1;
     } catch (error) {
-      const message = errorCode(error);
-      await reminderDoc.ref.update({ lastError: message, processingKey: FieldValue.delete() });
-      if (message.includes('registration-token-not-registered') || message.includes('invalid-registration-token')) {
-        await reminderDoc.ref.delete();
-      }
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes('410') || message.includes('404')) await pool.query('DELETE FROM push_devices WHERE device_id = $1', [reminder.device_id]);
+      else await pool.query('UPDATE meal_reminders SET last_sent_date = NULL, last_sent_time = NULL WHERE id = $1', [reminder.id]);
     }
   }
   return processed;
 }
 
-export async function sendTestPush(token: string): Promise<void> {
-  const messaging = getMessaging(getAdminApp());
-  await messaging.send({
-    token,
-    data: { mealId: 'test', title: 'Meal Plan Reminder', body: 'Your server push notifications are working.' },
-    webpush: { fcmOptions: { link: '/meals' } },
-  });
+export async function sendTestPush(subscription: Subscription): Promise<void> {
+  configurePush();
+  await webpush.sendNotification(subscription, JSON.stringify({ title: 'Meal Plan Reminder', body: 'Your standard Web Push notifications are working.', mealId: 'test' }));
 }
 
-export function describeError(error: unknown): string {
-  const message = errorCode(error);
-  if (message.includes('registration-token-not-registered') || message.includes('invalid-registration-token')) return 'FCM token is invalid or expired. Enable reminders again to register a new token.';
-  if (message.includes('Unauthorized')) return 'Unauthorized cron request.';
-  return message;
-}
-
-export async function removeStaleToken(token: string): Promise<void> {
-  const db = getFirestore(getAdminApp());
-  const stale = await db.collection(REMINDERS_COLLECTION).where('token', '==', token).get();
-  const batch = db.batch();
-  stale.docs.forEach((doc) => batch.delete(doc.ref));
-  await batch.commit();
+export async function removeStaleSubscription(endpoint: string): Promise<void> {
+  await ensureTables();
+  await pool.query('DELETE FROM push_devices WHERE endpoint = $1', [endpoint]);
 }

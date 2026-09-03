@@ -2,7 +2,7 @@
  * The bundled 42-meal Lebanese pregnancy meal plan.
  *
  * This is the local source of truth for the recurring MON-SUN plan. It is
- * intentionally independent of Firebase so the plan works offline.
+ * intentionally independent of network services so the plan works offline.
  */
 
 import { DayOfWeek, Meal, MealType } from '../types';
