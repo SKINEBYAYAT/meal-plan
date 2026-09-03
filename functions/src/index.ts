@@ -1,6 +1,5 @@
 import * as admin from 'firebase-admin';
 import { onCall, onRequest, HttpsError } from 'firebase-functions/v2/https';
-import { onSchedule } from 'firebase-functions/v2/scheduler';
 
 admin.initializeApp();
 
@@ -78,20 +77,39 @@ export const removeMealReminder = onCall(async (request) => {
   return { ok: true };
 });
 
+export const setMasterReminder = onCall(async (request) => {
+  const deviceId = requireString(request.data?.deviceId, 'deviceId');
+  await db.collection('devices').doc(deviceId).set({
+    masterEnabled: request.data?.enabled === true,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
+  return { ok: true };
+});
+
 export const sendTestNotification = onCall(async (request) => {
   const token = requireString(request.data?.token, 'token');
-  await messaging.send({
-    token,
-    data: {
-      mealId: 'test',
-      title: 'Meal Plan Reminder',
-      body: 'Your server push notifications are working.',
-    },
-    webpush: {
-      fcmOptions: { link: '/meals' },
-    },
-  });
-  return { ok: true };
+  try {
+    await messaging.send({
+      token,
+      data: {
+        mealId: 'test',
+        title: 'Meal Plan Reminder',
+        body: 'Your server push notifications are working.',
+      },
+      webpush: { fcmOptions: { link: '/meals' } },
+    });
+    return { ok: true };
+  } catch (error) {
+    const code = error instanceof Error ? error.message : String(error);
+    if (code.includes('registration-token-not-registered') || code.includes('invalid-registration-token')) {
+      const deviceId = requireString(request.data?.deviceId, 'deviceId');
+      const stale = await db.collection(REMINDERS_COLLECTION).where('deviceId', '==', deviceId).get();
+      const batch = db.batch();
+      stale.docs.forEach((doc) => batch.delete(doc.ref));
+      await batch.commit();
+    }
+    throw new HttpsError('internal', `FCM test delivery failed: ${code}`);
+  }
 });
 
 function getBeirutNow(): { weekday: DayOfWeek; date: string; time: string } {
@@ -133,6 +151,8 @@ async function processDueReminders(): Promise<number> {
         lastSentDate?: string;
         lastSentTime?: string;
       };
+      const device = await db.collection('devices').doc(reminder.deviceId).get();
+      if (device.data()?.masterEnabled !== true) continue;
       if (!isDue(reminder, current.time)) continue;
       if (reminder.lastSentDate === current.date && reminder.lastSentTime === reminder.time) continue;
 
@@ -175,14 +195,11 @@ async function processDueReminders(): Promise<number> {
     return sent;
 }
 
-export const sendMealNotifications = onSchedule(
-  { schedule: 'every 5 minutes', timeZone: TIMEZONE },
-  async () => {
-    await processDueReminders();
-  },
-);
-
 export const mealRemindersCron = onRequest(async (request, response) => {
+  if (request.method !== 'POST') {
+    response.status(405).json({ ok: false, error: 'POST required' });
+    return;
+  }
   const expected = process.env.CRON_SECRET;
   const authorization = request.headers.authorization;
   if (!expected || authorization !== `Bearer ${expected}`) {

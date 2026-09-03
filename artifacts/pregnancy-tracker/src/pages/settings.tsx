@@ -1,37 +1,52 @@
 import { useSettings } from '../hooks/useSettings';
 import { useNotifications } from '../hooks/useNotifications';
-import { useMeals, getAllMealsByDay } from '../hooks/useMeals';
+import { getAllMealsByDay } from '../hooks/useMeals';
 import {
   getStoredFcmToken,
-  removeMealReminder,
   requestNotificationPermission,
+  setMasterReminder,
   sendRemoteTestNotification,
   syncMealReminder,
 } from '../firebase';
 import { Bell, User, Heart, Download, Upload, Trash2, ChevronRight, Bug } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Link } from 'wouter';
 import { MEAL_PLAN_KEY, COMPLETIONS_KEY, MEAL_DELETIONS_KEY, HABITS_KEY, HABIT_LOGS_KEY, STREAKS_KEY, SETTINGS_KEY } from '../lib/storage';
 
+const BEIRUT_DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
+function nextReminderLabel(enabled: boolean): string {
+  if (!enabled) return 'None scheduled';
+  const meals = Object.values(getAllMealsByDay()).flat().filter((meal) => meal.reminderEnabled);
+  if (meals.length === 0) return 'None scheduled';
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Beirut', weekday: 'long', hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const today = BEIRUT_DAYS.indexOf(values.weekday.toLowerCase());
+  const currentMinutes = Number(values.hour === '24' ? '0' : values.hour) * 60 + Number(values.minute);
+  for (let offset = 0; offset < 7; offset += 1) {
+    const day = BEIRUT_DAYS[(today + offset) % 7];
+    const candidate = meals.filter((meal) => meal.day === day && (offset > 0 || meal.time > `${String(Math.floor(currentMinutes / 60)).padStart(2, '0')}:${String(currentMinutes % 60).padStart(2, '0')}`)).sort((a, b) => a.time.localeCompare(b.time))[0];
+    if (candidate) {
+      const [hour, minute] = candidate.time.split(':').map(Number);
+      const formatted = new Date(2000, 0, 1, hour, minute).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      return `${candidate.name} · ${formatted}`;
+    }
+  }
+  return 'None scheduled';
+}
+
 export default function SettingsPage() {
   const { settings, updateSettings } = useSettings();
-  const { updateMeal } = useMeals('monday');
-  const { permission, isSupported, swStatus, requestPermission, getDebugInfo } = useNotifications();
+  const { permission, isSupported, swStatus, requestPermission } = useNotifications();
   const [name, setName] = useState(settings.userName);
-  const [fcmLoading, setFcmLoading] = useState(false);
-  const [notificationInfo, setNotificationInfo] = useState(() => getDebugInfo());
   const { toast } = useToast();
-
-  useEffect(() => {
-    setNotificationInfo(getDebugInfo());
-    const timer = window.setInterval(() => setNotificationInfo(getDebugInfo()), 30000);
-    return () => window.clearInterval(timer);
-  }, [getDebugInfo]);
 
   const handleNameSave = () => {
     updateSettings({ userName: name });
@@ -85,8 +100,17 @@ export default function SettingsPage() {
     if (checked && permission !== 'granted') {
       const granted = await requestPermission();
       if (granted) {
+        const token = getStoredFcmToken() ?? await requestNotificationPermission();
+        if (!token) {
+          toast({ title: 'Notifications unavailable', description: 'FCM could not register this device.', variant: 'destructive' });
+          return;
+        }
+        await Promise.all(Object.values(getAllMealsByDay()).flat()
+          .filter((meal) => meal.reminderEnabled)
+          .map((meal) => syncMealReminder(meal, token)));
+        await setMasterReminder(true);
         updateSettings({ notificationsEnabled: true });
-        toast({ title: 'Notifications enabled 🔔', description: 'Turn on reminders per meal in the Meals tab.' });
+        toast({ title: 'Meal reminders enabled', description: 'Only meals with Reminder ON will notify.' });
       } else {
         toast({
           title: 'Permission denied',
@@ -98,31 +122,10 @@ export default function SettingsPage() {
         });
       }
     } else {
+      await setMasterReminder(checked);
       updateSettings({ notificationsEnabled: checked });
     }
   };
-
-  const handleEnableReminders = useCallback(async () => {
-    setFcmLoading(true);
-    const token = await requestNotificationPermission();
-    console.log('[Settings] FCM token result:', token);
-    if (token) {
-      try {
-        const meals = Object.values(getAllMealsByDay()).flat();
-        await Promise.all(
-          meals.filter((meal) => meal.reminderEnabled).map((meal) => syncMealReminder(meal, token)),
-        );
-        updateSettings({ notificationsEnabled: true });
-        toast({ title: 'Reminders enabled 🔔', description: 'Device registered for push notifications.' });
-      } catch (err) {
-        console.error('[Settings] Failed to sync reminders:', err);
-        toast({ title: 'Could not sync reminders', description: 'Check your connection and try again.', variant: 'destructive' });
-      }
-    } else {
-      toast({ title: 'Could not enable reminders', description: 'Check the console for details.', variant: 'destructive' });
-    }
-    setFcmLoading(false);
-  }, [toast, updateSettings]);
 
   const handleTestNotification = useCallback(async () => {
     const token = getStoredFcmToken() ?? await requestNotificationPermission();
@@ -135,37 +138,11 @@ export default function SettingsPage() {
       toast({ title: 'Test notification sent', description: 'Check your notification tray.' });
     } catch (err) {
       console.error('[Settings] Failed to send test notification:', err);
-      toast({ title: 'Test notification failed', description: 'Check your connection and Firebase configuration.', variant: 'destructive' });
+      const message = err instanceof Error ? err.message : String(err);
+      toast({ title: 'Test notification failed', description: message, variant: 'destructive' });
     }
   }, [toast]);
 
-  const handleAllReminders = useCallback(async (enabled: boolean) => {
-    let token = getStoredFcmToken();
-    if (enabled && !token) token = await requestNotificationPermission();
-    if (enabled && !token) {
-      toast({ title: 'Permission required', description: 'Enable notifications before enabling reminders.', variant: 'destructive' });
-      return;
-    }
-    const meals = Object.values(getAllMealsByDay()).flat();
-    try {
-      for (const meal of meals) {
-        const updated = { ...meal, reminderEnabled: enabled };
-        if (enabled && token) await syncMealReminder(updated, token);
-        if (!enabled) await removeMealReminder(meal.id);
-        updateMeal(updated);
-      }
-    } catch (error) {
-      console.error('[Settings] Failed to update all reminders:', error);
-      toast({ title: 'Could not update all reminders', description: 'Try again when connected.', variant: 'destructive' });
-      return;
-    }
-    updateSettings({ notificationsEnabled: enabled });
-  }, [requestPermission, removeMealReminder, syncMealReminder, toast, updateMeal, updateSettings]);
-
-  const permissionLabel =
-    permission === 'granted' ? 'Granted ✓' :
-    permission === 'denied'  ? 'Denied — change in Settings' :
-    'Not requested';
 
   return (
     <div className="flex flex-col h-full">
@@ -210,7 +187,7 @@ export default function SettingsPage() {
               <div>
                 <div className="font-medium">Meal Reminders</div>
                 <div className="text-sm text-gray-400 mt-0.5">
-                  {isSupported ? permissionLabel : 'Not supported in this browser'}
+                  Get notified when meals are due
                 </div>
               </div>
               <Switch
@@ -221,20 +198,9 @@ export default function SettingsPage() {
               />
             </div>
 
-            <div className="p-4 space-y-3">
-              <div className="text-sm font-medium">All meal reminders</div>
-              <div className="flex gap-2">
-                <Button onClick={() => void handleAllReminders(true)} variant="outline" className="h-9 flex-1 border-[#2d3748]">Enable All</Button>
-                <Button onClick={() => void handleAllReminders(false)} variant="outline" className="h-9 flex-1 border-[#2d3748]">Disable All</Button>
-              </div>
-            </div>
-
             <div className="p-4 grid grid-cols-2 gap-x-4 gap-y-2 text-xs text-gray-400">
-              <span>Notifications Supported</span><strong className="text-right text-gray-200">{isSupported ? 'Yes' : 'No'}</strong>
-              <span>Permission Status</span><strong className="text-right text-gray-200">{permissionLabel}</strong>
-              <span>FCM Token Status</span><strong className="text-right text-gray-200">{getStoredFcmToken() ? 'Registered' : 'Not registered'}</strong>
-              <span>Push Service Status</span><strong className="text-right text-gray-200">{swStatus}</strong>
-              <span>Next Meal Reminder</span><strong className="text-right text-gray-200">{notificationInfo.upcoming ? `${notificationInfo.upcoming.mealName} at ${new Date(notificationInfo.upcoming.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'None scheduled'}</strong>
+              <span>Push notifications</span><strong className="text-right text-gray-200">{isSupported && permission === 'granted' && swStatus === 'registered' && getStoredFcmToken() ? 'Ready' : 'Not ready'}</strong>
+              <span>Next reminder</span><strong className="text-right text-gray-200">{nextReminderLabel(settings.notificationsEnabled)}</strong>
             </div>
 
             <div className="flex items-center justify-between p-4">
@@ -267,21 +233,6 @@ export default function SettingsPage() {
               />
             </div>
 
-            {/* Enable Reminders via FCM */}
-            <div className="flex items-center justify-between p-4">
-              <div>
-                <div className="font-medium">Enable Reminders</div>
-                <div className="text-sm text-gray-400 mt-0.5">Register for push notifications</div>
-              </div>
-              <Button
-                onClick={handleEnableReminders}
-                disabled={fcmLoading}
-                className="h-9 px-4 text-sm bg-[#4CAF50] text-[#0D1117] hover:bg-[#66BB6A] disabled:opacity-50"
-              >
-                {fcmLoading ? 'Requesting…' : 'Enable'}
-              </Button>
-            </div>
-
             {/* Link to debug page */}
             <Link href="/notifications-debug">
               <div className="flex items-center gap-3 p-4 hover:bg-[#2d3748]/50 transition-colors cursor-pointer">
@@ -290,7 +241,7 @@ export default function SettingsPage() {
                 </div>
                 <div className="flex-1">
                   <div className="font-medium text-sm">Notification Debug</div>
-                  <div className="text-xs text-gray-400">Status, test, and reschedule</div>
+                  <div className="text-xs text-gray-400">Development tools</div>
                 </div>
                 <ChevronRight className="w-4 h-4 text-gray-500" />
               </div>

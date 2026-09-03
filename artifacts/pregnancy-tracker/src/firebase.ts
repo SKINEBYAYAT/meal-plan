@@ -130,3 +130,11 @@ export async function sendRemoteTestNotification(token: string): Promise<void> {
   );
   await sendTest({ token, deviceId: getDeviceId() });
 }
+
+export async function setMasterReminder(enabled: boolean): Promise<void> {
+  const setMaster = httpsCallable<{ deviceId: string; enabled: boolean }, { ok: boolean }>(
+    functions,
+    'setMasterReminder',
+  );
+  await setMaster({ deviceId: getDeviceId(), enabled });
+}

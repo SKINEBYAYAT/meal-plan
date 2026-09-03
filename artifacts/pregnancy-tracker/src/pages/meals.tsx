@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useMeals } from '../hooks/useMeals';
+import { useSettings } from '../hooks/useSettings';
 import { useNotifications } from '../hooks/useNotifications';
 import { Check, Clock, Plus, Trash2, Edit2, Copy, X, Bell, BellOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -37,6 +38,7 @@ const TODAY_DOW: DayOfWeek = (
 export default function MealsPage() {
   const [selectedDay, setSelectedDay] = useState<DayOfWeek>(TODAY_DOW);
   const { dayPlan, toggleMealCompleted, updateMeal, deleteMeal } = useMeals(selectedDay);
+  const { settings } = useSettings();
   const { permission, requestPermission, scheduleAll, scheduleMeal, cancelMeal } = useNotifications();
   const { toast } = useToast();
 
@@ -56,9 +58,9 @@ export default function MealsPage() {
   // Re-schedule today's reminders whenever the meal list changes
   useEffect(() => {
     if (permission === 'granted') {
-      scheduleAll(dayPlan.meals, selectedDay);
+      scheduleAll(dayPlan.meals, selectedDay, settings.notificationsEnabled);
     }
-  }, [dayPlan.meals, selectedDay, permission, scheduleAll]);
+  }, [dayPlan.meals, selectedDay, permission, scheduleAll, settings.notificationsEnabled]);
 
   // Deep-link from notification tap
   useEffect(() => {

@@ -39,7 +39,11 @@ export function useNotifications() {
    * Schedule all reminder-enabled meals for a given date.
    * Cancels any previously scheduled timers first.
    */
-  const scheduleAll = useCallback((meals: Meal[], day: DayOfWeek): void => {
+  const scheduleAll = useCallback((meals: Meal[], day: DayOfWeek, enabled = true): void => {
+    if (!enabled) {
+      notificationScheduler.cancelAll();
+      return;
+    }
     if (Notification.permission !== 'granted') return;
     notificationScheduler.scheduleAll(meals, day);
   }, []);
