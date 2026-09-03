@@ -1,5 +1,6 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { DayOfWeek, Meal } from './types';
 
 const firebaseConfig = {
   apiKey: "AIzaSyD5whIIeNe6BlAX-l9e1y2m5x3NXlNHTrs",
@@ -13,9 +14,18 @@ const firebaseConfig = {
 const VAPID_KEY = 'BAZFsFhWDAnDyY0nHU0Jkp1DaK112_DEesqjQ4B5fN8MFNp7vcWtqdU9Na3wSRzKdQW6RJLv-_L66kjhizTjfGc';
 
 const app = initializeApp(firebaseConfig);
+const functions = getFunctions(app);
 
-// Firestore is always available — init eagerly.
-export const db = getFirestore(app);
+const DEVICE_ID_KEY = 'pregnancy-tracker-device-id';
+export const FCM_TOKEN_KEY = 'pregnancy-tracker-fcm-token';
+
+function getDeviceId(): string {
+  const existing = localStorage.getItem(DEVICE_ID_KEY);
+  if (existing) return existing;
+  const deviceId = crypto.randomUUID();
+  localStorage.setItem(DEVICE_ID_KEY, deviceId);
+  return deviceId;
+}
 
 // Messaging is only available in browsers that support Service Workers + Push.
 // We lazy-load it so a crash here never blocks db or the rest of the app.
@@ -61,6 +71,7 @@ export async function requestNotificationPermission(): Promise<string | null> {
     });
 
     if (token) {
+      localStorage.setItem(FCM_TOKEN_KEY, token);
       console.log('[FCM] Registration token:', token);
     } else {
       console.warn('[FCM] No token returned — VAPID key may be missing or SW not registered.');
@@ -71,4 +82,51 @@ export async function requestNotificationPermission(): Promise<string | null> {
     console.error('[FCM] Failed to get token:', err);
     return null;
   }
+}
+
+export function getStoredFcmToken(): string | null {
+  return localStorage.getItem(FCM_TOKEN_KEY);
+}
+
+type ReminderPayload = {
+  deviceId: string;
+  token: string;
+  mealId: string;
+  weekday: DayOfWeek;
+  time: string;
+  title: string;
+  foods: string[];
+  icon: string;
+  enabled: boolean;
+};
+
+export async function syncMealReminder(meal: Meal, token: string): Promise<void> {
+  const sync = httpsCallable<ReminderPayload, { ok: boolean }>(functions, 'syncMealReminder');
+  await sync({
+    deviceId: getDeviceId(),
+    token,
+    mealId: meal.id,
+    weekday: meal.day,
+    time: meal.time,
+    title: meal.name,
+    foods: meal.foods,
+    icon: meal.icon ?? '🥘',
+    enabled: meal.reminderEnabled,
+  });
+}
+
+export async function removeMealReminder(mealId: string): Promise<void> {
+  const remove = httpsCallable<{ deviceId: string; mealId: string }, { ok: boolean }>(
+    functions,
+    'removeMealReminder',
+  );
+  await remove({ deviceId: getDeviceId(), mealId });
+}
+
+export async function sendRemoteTestNotification(token: string): Promise<void> {
+  const sendTest = httpsCallable<{ token: string; deviceId: string }, { ok: boolean }>(
+    functions,
+    'sendTestNotification',
+  );
+  await sendTest({ token, deviceId: getDeviceId() });
 }

@@ -9,6 +9,12 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
+import {
+  getStoredFcmToken,
+  removeMealReminder,
+  requestNotificationPermission as requestFcmToken,
+  syncMealReminder,
+} from '../firebase';
 
 // ─── Weekday config ───────────────────────────────────────────────────────────
 
@@ -161,10 +167,13 @@ export default function MealsPage() {
       reminderEnabled: reminderOn,
     };
 
-    // If the day changed, remove the old Firestore doc
+    // Moving a meal changes its stable reminder key.
     if (dayChanged) {
       deleteMeal(selectedMeal.id);
       cancelMeal(selectedMeal.id);
+      void removeMealReminder(selectedMeal.id).catch((error) => {
+        console.error('[Meals] Failed to remove moved reminder:', error);
+      });
     }
 
     updateMeal(updated);
@@ -173,13 +182,24 @@ export default function MealsPage() {
     cancelMeal(updated.id);
     if (reminderOn && permission === 'granted') {
       scheduleMeal(updated, editDay);
+      const token = getStoredFcmToken() ?? await requestFcmToken();
+      if (token) {
+        void syncMealReminder(updated, token).catch((error) => {
+          console.error('[Meals] Failed to sync reminder:', error);
+          toast({ title: 'Reminder saved locally', description: 'Server sync failed. Try enabling reminders again in Settings.' });
+        });
+      }
+    } else if (!reminderOn) {
+      void removeMealReminder(updated.id).catch((error) => {
+        console.error('[Meals] Failed to remove reminder:', error);
+      });
     }
 
     setIsEditing(false);
     setSelectedMeal(updated);
   }, [
     selectedMeal, editName, editDay, editTime, editFoods, editNotes, editReminderEnabled,
-    permission, requestPermission, updateMeal, deleteMeal, cancelMeal, scheduleMeal, toast,
+    permission, requestPermission, requestFcmToken, updateMeal, deleteMeal, cancelMeal, scheduleMeal, toast,
   ]);
 
   const duplicateMeal = useCallback(() => {
@@ -199,6 +219,9 @@ export default function MealsPage() {
     if (!selectedMeal) return;
     if (!window.confirm(`Delete "${selectedMeal.name}" from the weekly plan? This cannot be undone.`)) return;
     cancelMeal(selectedMeal.id);
+    void removeMealReminder(selectedMeal.id).catch((error) => {
+      console.error('[Meals] Failed to remove deleted reminder:', error);
+    });
     deleteMeal(selectedMeal.id);
     setSelectedMeal(null);
   }, [selectedMeal, cancelMeal, deleteMeal]);
@@ -221,14 +244,23 @@ export default function MealsPage() {
       updateMeal(updated);
       if (enabled) {
         scheduleMeal(updated, meal.day);
+        const token = getStoredFcmToken() ?? await requestFcmToken();
+        if (token) {
+          void syncMealReminder(updated, token).catch((error) => {
+            console.error('[Meals] Failed to sync reminder:', error);
+          });
+        }
         toast({ title: '🔔 Reminder set', description: `You'll be reminded for ${meal.name}.` });
       } else {
         cancelMeal(meal.id);
+        void removeMealReminder(meal.id).catch((error) => {
+          console.error('[Meals] Failed to remove reminder:', error);
+        });
         toast({ title: 'Reminder off', description: `No more reminders for ${meal.name}.` });
       }
       setSelectedMeal(updated);
     },
-    [permission, requestPermission, updateMeal, scheduleMeal, cancelMeal, toast],
+    [permission, requestPermission, requestFcmToken, updateMeal, scheduleMeal, cancelMeal, toast],
   );
 
   // ── Render ────────────────────────────────────────────────────────────────

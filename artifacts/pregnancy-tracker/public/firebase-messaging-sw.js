@@ -14,9 +14,11 @@ const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage((payload) => {
   console.log("Background message:", payload);
-  const { title, body } = payload.notification || {};
+  const { title, body } = payload.data || payload.notification || {};
   self.registration.showNotification(title || "Meal Plan Reminder", {
     body: body || "",
-    icon: "/icon-192.png",
+    icon: "/icons/icon-192.png",
+    badge: "/icons/icon-192.png",
+    data: payload.data || {},
   });
 });

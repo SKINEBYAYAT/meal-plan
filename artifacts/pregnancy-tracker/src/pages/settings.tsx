@@ -1,11 +1,17 @@
 import { useSettings } from '../hooks/useSettings';
 import { useNotifications } from '../hooks/useNotifications';
-import { requestNotificationPermission, db } from '../firebase';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { useMeals, getAllMealsByDay } from '../hooks/useMeals';
+import {
+  getStoredFcmToken,
+  removeMealReminder,
+  requestNotificationPermission,
+  sendRemoteTestNotification,
+  syncMealReminder,
+} from '../firebase';
 import { Bell, User, Heart, Download, Upload, Trash2, ChevronRight, Bug } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -14,10 +20,18 @@ import { MEAL_PLAN_KEY, COMPLETIONS_KEY, MEAL_DELETIONS_KEY, HABITS_KEY, HABIT_L
 
 export default function SettingsPage() {
   const { settings, updateSettings } = useSettings();
-  const { permission, isSupported, requestPermission } = useNotifications();
+  const { updateMeal } = useMeals('monday');
+  const { permission, isSupported, swStatus, requestPermission, getDebugInfo } = useNotifications();
   const [name, setName] = useState(settings.userName);
   const [fcmLoading, setFcmLoading] = useState(false);
+  const [notificationInfo, setNotificationInfo] = useState(() => getDebugInfo());
   const { toast } = useToast();
+
+  useEffect(() => {
+    setNotificationInfo(getDebugInfo());
+    const timer = window.setInterval(() => setNotificationInfo(getDebugInfo()), 30000);
+    return () => window.clearInterval(timer);
+  }, [getDebugInfo]);
 
   const handleNameSave = () => {
     updateSettings({ userName: name });
@@ -94,20 +108,59 @@ export default function SettingsPage() {
     console.log('[Settings] FCM token result:', token);
     if (token) {
       try {
-        await setDoc(doc(db, 'tokens', 'primary-user'), {
-          token,
-          updatedAt: serverTimestamp(),
-        });
+        const meals = Object.values(getAllMealsByDay()).flat();
+        await Promise.all(
+          meals.filter((meal) => meal.reminderEnabled).map((meal) => syncMealReminder(meal, token)),
+        );
+        updateSettings({ notificationsEnabled: true });
         toast({ title: 'Reminders enabled 🔔', description: 'Device registered for push notifications.' });
       } catch (err) {
-        console.error('[Settings] Failed to save FCM token to Firestore:', err);
-        toast({ title: 'Reminders enabled 🔔', description: 'Token logged — Firestore save failed (check console).' });
+        console.error('[Settings] Failed to sync reminders:', err);
+        toast({ title: 'Could not sync reminders', description: 'Check your connection and try again.', variant: 'destructive' });
       }
     } else {
       toast({ title: 'Could not enable reminders', description: 'Check the console for details.', variant: 'destructive' });
     }
     setFcmLoading(false);
+  }, [toast, updateSettings]);
+
+  const handleTestNotification = useCallback(async () => {
+    const token = getStoredFcmToken() ?? await requestNotificationPermission();
+    if (!token) {
+      toast({ title: 'Could not enable reminders', description: 'Grant notification permission first.', variant: 'destructive' });
+      return;
+    }
+    try {
+      await sendRemoteTestNotification(token);
+      toast({ title: 'Test notification sent', description: 'Check your notification tray.' });
+    } catch (err) {
+      console.error('[Settings] Failed to send test notification:', err);
+      toast({ title: 'Test notification failed', description: 'Check your connection and Firebase configuration.', variant: 'destructive' });
+    }
   }, [toast]);
+
+  const handleAllReminders = useCallback(async (enabled: boolean) => {
+    let token = getStoredFcmToken();
+    if (enabled && !token) token = await requestNotificationPermission();
+    if (enabled && !token) {
+      toast({ title: 'Permission required', description: 'Enable notifications before enabling reminders.', variant: 'destructive' });
+      return;
+    }
+    const meals = Object.values(getAllMealsByDay()).flat();
+    try {
+      for (const meal of meals) {
+        const updated = { ...meal, reminderEnabled: enabled };
+        if (enabled && token) await syncMealReminder(updated, token);
+        if (!enabled) await removeMealReminder(meal.id);
+        updateMeal(updated);
+      }
+    } catch (error) {
+      console.error('[Settings] Failed to update all reminders:', error);
+      toast({ title: 'Could not update all reminders', description: 'Try again when connected.', variant: 'destructive' });
+      return;
+    }
+    updateSettings({ notificationsEnabled: enabled });
+  }, [requestPermission, removeMealReminder, syncMealReminder, toast, updateMeal, updateSettings]);
 
   const permissionLabel =
     permission === 'granted' ? 'Granted ✓' :
@@ -166,6 +219,32 @@ export default function SettingsPage() {
                 disabled={!isSupported}
                 className="data-[state=checked]:bg-[#4CAF50]"
               />
+            </div>
+
+            <div className="p-4 space-y-3">
+              <div className="text-sm font-medium">All meal reminders</div>
+              <div className="flex gap-2">
+                <Button onClick={() => void handleAllReminders(true)} variant="outline" className="h-9 flex-1 border-[#2d3748]">Enable All</Button>
+                <Button onClick={() => void handleAllReminders(false)} variant="outline" className="h-9 flex-1 border-[#2d3748]">Disable All</Button>
+              </div>
+            </div>
+
+            <div className="p-4 grid grid-cols-2 gap-x-4 gap-y-2 text-xs text-gray-400">
+              <span>Notifications Supported</span><strong className="text-right text-gray-200">{isSupported ? 'Yes' : 'No'}</strong>
+              <span>Permission Status</span><strong className="text-right text-gray-200">{permissionLabel}</strong>
+              <span>FCM Token Status</span><strong className="text-right text-gray-200">{getStoredFcmToken() ? 'Registered' : 'Not registered'}</strong>
+              <span>Push Service Status</span><strong className="text-right text-gray-200">{swStatus}</strong>
+              <span>Next Meal Reminder</span><strong className="text-right text-gray-200">{notificationInfo.upcoming ? `${notificationInfo.upcoming.mealName} at ${new Date(notificationInfo.upcoming.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'None scheduled'}</strong>
+            </div>
+
+            <div className="flex items-center justify-between p-4">
+              <div>
+                <div className="font-medium">Send Test Notification</div>
+                <div className="text-sm text-gray-400 mt-0.5">Verify server push delivery</div>
+              </div>
+              <Button onClick={() => void handleTestNotification()} className="h-9 px-4 text-sm bg-[#2d3748] text-white hover:bg-[#4CAF50]">
+                Test
+              </Button>
             </div>
 
             {permission === 'denied' && (
