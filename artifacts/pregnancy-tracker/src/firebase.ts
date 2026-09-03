@@ -124,11 +124,13 @@ export async function removeMealReminder(mealId: string): Promise<void> {
 }
 
 export async function sendRemoteTestNotification(token: string): Promise<void> {
-  const sendTest = httpsCallable<{ token: string; deviceId: string }, { ok: boolean }>(
-    functions,
-    'sendTestNotification',
-  );
-  await sendTest({ token, deviceId: getDeviceId() });
+  const response = await fetch('/api/notifications/test', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ token }),
+  });
+  const result = await response.json() as { success?: boolean; error?: string };
+  if (!response.ok || !result.success) throw new Error(result.error ?? `Test notification failed (${response.status}).`);
 }
 
 export async function setMasterReminder(enabled: boolean): Promise<void> {

@@ -33,101 +33,66 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.sendMealNotifications = void 0;
+exports.setMasterReminder = exports.removeMealReminder = exports.syncMealReminder = void 0;
 const admin = __importStar(require("firebase-admin"));
-const scheduler_1 = require("firebase-functions/v2/scheduler");
+const https_1 = require("firebase-functions/v2/https");
 admin.initializeApp();
 const db = admin.firestore();
-const messaging = admin.messaging();
-// Lebanon timezone (Asia/Beirut = UTC+2 standard / UTC+3 DST)
-const TIMEZONE = 'Asia/Beirut';
-function getCurrentDayOfWeek(tz) {
-    const dayName = new Intl.DateTimeFormat('en-US', {
-        timeZone: tz,
-        weekday: 'long',
-    }).format(new Date());
-    return dayName.toLowerCase();
+const REMINDERS_COLLECTION = 'reminders';
+function requireString(value, field) {
+    if (typeof value !== 'string' || value.trim() === '') {
+        throw new https_1.HttpsError('invalid-argument', `${field} is required.`);
+    }
+    return value.trim();
 }
-/**
- * Runs every 5 minutes (Beirut time).
- * Finds meals whose `time` falls within the current 5-minute window on today's weekday,
- * not already notified today, and sends an FCM push to the device in tokens/primary-user.
- */
-exports.sendMealNotifications = (0, scheduler_1.onSchedule)({ schedule: 'every 5 minutes', timeZone: TIMEZONE }, async () => {
-    // ── Current Beirut time ────────────────────────────────────────────────────
-    const now = new Date();
-    const beirutHHMM = new Intl.DateTimeFormat('en-US', {
-        timeZone: TIMEZONE,
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-    }).format(now);
-    // yyyy-MM-dd in Beirut — used for lastNotifiedDate deduplication
-    const todayStr = new Intl.DateTimeFormat('en-CA', {
-        timeZone: TIMEZONE,
-    }).format(now);
-    const currentDow = getCurrentDayOfWeek(TIMEZONE);
-    const [currentHour, currentMinute] = beirutHHMM.split(':').map(Number);
-    const currentTotalMinutes = currentHour * 60 + currentMinute;
-    console.log(`[scheduler] ${beirutHHMM} Beirut | day: ${currentDow} | date: ${todayStr}`);
-    // ── FCM token ──────────────────────────────────────────────────────────────
-    const tokenDoc = await db.collection('tokens').doc('primary-user').get();
-    if (!tokenDoc.exists) {
-        console.log('[scheduler] No FCM token — skipping.');
-        return;
+function reminderFromData(data) {
+    const weekday = requireString(data.weekday, 'weekday');
+    const time = requireString(data.time, 'time');
+    if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time)) {
+        throw new https_1.HttpsError('invalid-argument', 'time must be HH:mm.');
     }
-    const { token } = tokenDoc.data();
-    // ── Today's weekday meal templates ─────────────────────────────────────────
-    const mealsSnap = await db
-        .collection('meals')
-        .where('day', '==', currentDow)
-        .where('reminderEnabled', '==', true)
-        .get();
-    if (mealsSnap.empty) {
-        console.log(`[scheduler] No reminder-enabled meals for ${currentDow}`);
-        return;
+    if (!['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].includes(weekday)) {
+        throw new https_1.HttpsError('invalid-argument', 'weekday is invalid.');
     }
-    const sends = [];
-    const batch = db.batch();
-    for (const mealDoc of mealsSnap.docs) {
-        const meal = mealDoc.data();
-        // Is this meal within the current 5-minute window?
-        const [mealHour, mealMinute] = meal.time.split(':').map(Number);
-        const mealTotalMinutes = mealHour * 60 + mealMinute;
-        if (Math.abs(mealTotalMinutes - currentTotalMinutes) > 4)
-            continue;
-        // Already sent today?
-        if (meal.lastNotifiedDate === todayStr) {
-            console.log(`[scheduler] ${meal.name} already notified today — skipping.`);
-            continue;
-        }
-        const body = (meal.foods ?? []).join(', ') || 'Time to eat!';
-        console.log(`[scheduler] Sending for: ${meal.name} at ${meal.time}`);
-        sends.push(messaging.send({
-            token,
-            notification: { title: meal.name, body },
-            data: { mealId: meal.id },
-            webpush: {
-                notification: {
-                    title: meal.name,
-                    body,
-                    icon: '/apple-touch-icon.png',
-                },
-                fcmOptions: {
-                    link: `/meals?highlight=${encodeURIComponent(meal.id)}`,
-                },
-            },
-        }));
-        batch.update(mealDoc.ref, {
-            lastNotifiedDate: todayStr,
-        });
+    if (!Array.isArray(data.foods) || !data.foods.every((food) => typeof food === 'string')) {
+        throw new https_1.HttpsError('invalid-argument', 'foods must be an array of strings.');
     }
-    if (sends.length === 0) {
-        console.log('[scheduler] No meals in this window.');
-        return;
-    }
-    await Promise.all(sends);
-    await batch.commit();
-    console.log(`[scheduler] Sent ${sends.length} notification(s).`);
+    return {
+        deviceId: requireString(data.deviceId, 'deviceId'),
+        token: requireString(data.token, 'token'),
+        mealId: requireString(data.mealId, 'mealId'),
+        weekday,
+        time,
+        title: requireString(data.title, 'title'),
+        foods: data.foods,
+        icon: typeof data.icon === 'string' && data.icon ? data.icon : '🥘',
+        enabled: data.enabled === true,
+    };
+}
+function reminderId(deviceId, mealId) {
+    return `${deviceId}__${mealId}`;
+}
+exports.syncMealReminder = (0, https_1.onCall)(async (request) => {
+    const data = reminderFromData(request.data);
+    const id = reminderId(data.deviceId, data.mealId);
+    await db.collection(REMINDERS_COLLECTION).doc(id).set({
+        ...data,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    return { ok: true };
+});
+exports.removeMealReminder = (0, https_1.onCall)(async (request) => {
+    const deviceId = requireString(request.data?.deviceId, 'deviceId');
+    const mealId = requireString(request.data?.mealId, 'mealId');
+    await db.collection(REMINDERS_COLLECTION).doc(reminderId(deviceId, mealId)).delete();
+    return { ok: true };
+});
+exports.setMasterReminder = (0, https_1.onCall)(async (request) => {
+    const deviceId = requireString(request.data?.deviceId, 'deviceId');
+    await db.collection('devices').doc(deviceId).set({
+        masterEnabled: request.data?.enabled === true,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    return { ok: true };
 });
 //# sourceMappingURL=index.js.map
