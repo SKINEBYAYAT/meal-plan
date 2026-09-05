@@ -413,6 +413,16 @@ importers:
         version: 3.25.76
 
   artifacts/pregnancy-tracker:
+    dependencies:
+      '@vercel/node':
+        specifier: ^5.3.24
+        version: 5.10.2(rollup@4.62.3)
+      pg:
+        specifier: ^8.16.3
+        version: 8.22.0
+      web-push:
+        specifier: ^3.6.7
+        version: 3.6.7
     devDependencies:
       '@hookform/resolvers':
         specifier: ^3.10.0
