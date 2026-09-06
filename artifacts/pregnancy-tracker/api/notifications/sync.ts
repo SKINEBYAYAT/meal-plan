@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { removeReminder, setMaster, syncReminder } from '../_lib/meal-reminders';
+import { removeReminder, setMaster, syncReminder } from '../_lib/meal-reminders.js';
 
 type Body = {
   action: 'sync' | 'remove' | 'master';

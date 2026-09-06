@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { assertCronSecret, describeError, processDueReminders } from '../_lib/meal-reminders';
+import { assertCronSecret, describeError, processDueReminders } from '../_lib/meal-reminders.js';
 
 export default async function handler(request: VercelRequest, response: VercelResponse) {
   if (request.method !== 'POST') return response.status(405).json({ success: false, error: 'POST required' });

@@ -1,1 +1,1 @@
-export { default } from '../../artifacts/pregnancy-tracker/api/notifications/config';
+export { default } from '../../artifacts/pregnancy-tracker/api/notifications/config.js';
