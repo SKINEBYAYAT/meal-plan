@@ -46,7 +46,8 @@ export function assertCronSecret(authorization: string | undefined): void {
 }
 
 export function describeError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
+  const rawMessage = error instanceof Error ? error.message : String(error);
+  const message = rawMessage.replace(/postgres(?:ql)?:\/\/\S+/gi, 'postgresql://[redacted]');
   if (message === 'Unauthorized') return 'Unauthorized cron request.';
   if (message.includes('410') || message.includes('404')) return 'Push subscription is expired or no longer registered.';
   return message;

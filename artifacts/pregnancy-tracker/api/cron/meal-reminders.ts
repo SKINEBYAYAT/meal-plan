@@ -9,6 +9,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
     return response.status(200).json({ success: true, processed });
   } catch (error) {
     const message = describeError(error);
+    console.error('Meal reminder cron failed:', message);
     return response.status(message === 'Unauthorized cron request.' ? 401 : 500).json({ success: false, error: message });
   }
 }
