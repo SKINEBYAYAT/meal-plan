@@ -5,7 +5,7 @@ type DayOfWeek = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 's
 type Subscription = { endpoint: string; keys: { p256dh: string; auth: string } };
 type Reminder = {
   id: string; device_id: string; meal_id: string; weekday: DayOfWeek; time: string;
-  title: string; foods: string[]; icon: string; enabled: boolean;
+  title: string; foods: string; icon: string; enabled: boolean;
   last_sent_date: string | null; last_sent_time: string | null;
   endpoint: string; p256dh: string; auth: string;
 };
@@ -100,6 +100,15 @@ function due(reminder: Reminder, now: string): boolean {
   return Math.abs(h * 60 + m - nh * 60 - nm) <= 1;
 }
 
+function parseFoods(value: string): string[] {
+  try {
+    const foods: unknown = JSON.parse(value);
+    return Array.isArray(foods) && foods.every((food) => typeof food === 'string') ? foods : [];
+  } catch {
+    return [];
+  }
+}
+
 export async function processDueReminders(): Promise<number> {
   await ensureTables();
   configurePush();
@@ -113,7 +122,7 @@ export async function processDueReminders(): Promise<number> {
     const claim = await pool.query(`UPDATE meal_reminders SET last_sent_date = $1, last_sent_time = $2
       WHERE id = $3 AND NOT (last_sent_date = $1 AND last_sent_time = $2) RETURNING id`, [current.date, reminder.time, reminder.id]);
     if (!claim.rowCount) continue;
-    const body = ["Today's meal:", ...reminder.foods.map((food) => `• ${food}`)].join('\n');
+    const body = ["Today's meal:", ...parseFoods(reminder.foods).map((food) => `• ${food}`)].join('\n');
     try {
       await webpush.sendNotification({ endpoint: reminder.endpoint, keys: { p256dh: reminder.p256dh, auth: reminder.auth } }, JSON.stringify({
         title: `${reminder.icon} ${reminder.title}`, body, mealId: reminder.meal_id,
