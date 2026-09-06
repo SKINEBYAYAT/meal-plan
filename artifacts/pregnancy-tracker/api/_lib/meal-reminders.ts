@@ -132,6 +132,36 @@ function due(reminder: Reminder, now: string): boolean {
   return Math.abs(h * 60 + m - nh * 60 - nm) <= 1;
 }
 
+export async function setupAllReminders(deviceId: string, subscription: Subscription, meals: Array<{
+  id: string; weekday: DayOfWeek; time: string; title: string; foods: string[]; icon?: string;
+}>): Promise<void> {
+  await ensureTables();
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(`INSERT INTO push_devices (device_id, endpoint, p256dh, auth, master_enabled, updated_at)
+      VALUES ($1, $2, $3, $4, true, now()) ON CONFLICT (device_id) DO UPDATE SET
+      endpoint = EXCLUDED.endpoint, p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth,
+      master_enabled = true, updated_at = now()`,
+      [deviceId, subscription.endpoint, subscription.keys.p256dh, subscription.keys.auth]);
+    for (const meal of meals) {
+      await client.query(`INSERT INTO meal_reminders
+        (id, device_id, meal_id, weekday, time, title, foods, icon, enabled, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, now()) ON CONFLICT (id) DO UPDATE SET
+        weekday = EXCLUDED.weekday, time = EXCLUDED.time, title = EXCLUDED.title,
+        foods = EXCLUDED.foods, icon = EXCLUDED.icon, enabled = true, updated_at = now()`,
+        [`${deviceId}__${meal.id}`, deviceId, meal.id, meal.weekday, meal.time,
+          meal.title, JSON.stringify(meal.foods), meal.icon ?? '🥘']);
+    }
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 function parseFoods(value: string): string[] {
   try {
     const foods: unknown = JSON.parse(value);

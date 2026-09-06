@@ -1,8 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { removeReminder, setMaster, syncReminder } from '../_lib/meal-reminders.js';
+import { removeReminder, setMaster, setupAllReminders, syncReminder } from '../_lib/meal-reminders.js';
 
 type Body = {
-  action: 'sync' | 'remove' | 'master';
+  action: 'sync' | 'remove' | 'master' | 'setup-all';
   deviceId: string;
   subscription?: { endpoint: string; keys: { p256dh: string; auth: string } };
   mealId?: string;
@@ -12,6 +12,7 @@ type Body = {
   foods?: string[];
   icon?: string;
   enabled?: boolean;
+  meals?: Array<{ id: string; weekday: string; time: string; title: string; foods: string[]; icon?: string }>;
 };
 
 export default async function handler(request: VercelRequest, response: VercelResponse) {
@@ -19,7 +20,11 @@ export default async function handler(request: VercelRequest, response: VercelRe
   const body = request.body as Body;
   try {
     if (!body?.deviceId || !body.subscription) return response.status(400).json({ success: false, error: 'Device ID and push subscription are required.' });
-    if (body.action === 'remove' && body.mealId) await removeReminder(body.deviceId, body.mealId);
+    if (body.action === 'setup-all' && Array.isArray(body.meals) && body.meals.length > 0) {
+      const valid = body.meals.every((meal) => meal?.id && meal.weekday && meal.time && meal.title && Array.isArray(meal.foods));
+      if (!valid) return response.status(400).json({ success: false, error: 'Invalid meal reminder list.' });
+      await setupAllReminders(body.deviceId, body.subscription, body.meals.map((meal) => ({ ...meal, weekday: meal.weekday as never })));
+    } else if (body.action === 'remove' && body.mealId) await removeReminder(body.deviceId, body.mealId);
     else if (body.action === 'master') await setMaster(body.deviceId, body.subscription, body.enabled === true);
     else if (body.action === 'sync' && body.mealId && body.weekday && body.time && body.title && Array.isArray(body.foods)) {
       await syncReminder({ deviceId: body.deviceId, subscription: body.subscription, mealId: body.mealId, weekday: body.weekday as never, time: body.time, title: body.title, foods: body.foods, icon: body.icon, enabled: body.enabled === true });

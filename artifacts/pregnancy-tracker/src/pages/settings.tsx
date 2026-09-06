@@ -3,9 +3,9 @@ import { useNotifications } from '../hooks/useNotifications';
 import { getAllMealsByDay, setAllMealRemindersEnabled } from '../hooks/useMeals';
 import {
   requestPushSubscription,
+  setupAllMealReminders,
   setMasterReminder,
   sendRemoteTestNotification,
-  syncMealReminder,
 } from '../push';
 import { Bell, User, Heart, Download, Upload, Trash2, ChevronRight, Bug } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
@@ -111,18 +111,20 @@ export default function SettingsPage() {
           return;
         }
 
-        const subscription = await requestPushSubscription();
-        if (!subscription) {
-          toast({ title: 'Notifications unavailable', description: 'Web Push could not register this device.', variant: 'destructive' });
-          return;
-        }
-
         const meals = setAllMealRemindersEnabled(true);
-        await Promise.all(meals.map((meal) => syncMealReminder(meal)));
-        await setMasterReminder(true);
+        await setupAllMealReminders(meals);
         updateSettings({ notificationsEnabled: true });
-        await sendRemoteTestNotification();
-        toast({ title: 'Meal reminders enabled', description: 'A test notification was sent and all meals are scheduled.' });
+        try {
+          await sendRemoteTestNotification();
+          toast({ title: 'Meal reminders enabled', description: 'A test notification was sent and all meals are scheduled.' });
+        } catch (testError) {
+          console.error('[Settings] Reminder setup succeeded but test push failed:', testError);
+          toast({
+            title: 'Reminders scheduled',
+            description: testError instanceof Error ? `Test notification failed: ${testError.message}` : 'Test notification failed.',
+            variant: 'destructive',
+          });
+        }
       } else {
         await setMasterReminder(false);
         updateSettings({ notificationsEnabled: false });

@@ -17,11 +17,12 @@ function subscriptionJson(subscription: PushSubscription): PushSubscriptionJSON 
   return { endpoint: json.endpoint, keys: { p256dh: json.keys.p256dh, auth: json.keys.auth } };
 }
 
-async function getSubscription(): Promise<PushSubscription> {
+async function getSubscription(refresh = false): Promise<PushSubscription> {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) throw new Error('Standard Web Push is not supported.');
   const registration = await navigator.serviceWorker.ready;
   const existing = await registration.pushManager.getSubscription();
-  if (existing) return existing;
+  if (existing && !refresh) return existing;
+  if (existing) await existing.unsubscribe();
   const configResponse = await fetch('/api/notifications/config');
   const config = await configResponse.json() as { publicKey?: string; error?: string };
   if (!configResponse.ok || !config.publicKey) throw new Error(config.error ?? 'VAPID public key is unavailable.');
@@ -74,4 +75,26 @@ export async function sendRemoteTestNotification(): Promise<void> {
   });
   const result = await response.json() as { success?: boolean; error?: string };
   if (!response.ok || !result.success) throw new Error(result.error ?? `Test notification failed (${response.status}).`);
+}
+
+export async function setupAllMealReminders(meals: Meal[]): Promise<void> {
+  if (!('Notification' in window) || Notification.permission !== 'granted') {
+    throw new Error('Notification permission is not granted.');
+  }
+  // A fresh subscription repairs endpoints left behind by browser/PWA reinstalls
+  // or a previous VAPID key.
+  const subscription = subscriptionJson(await getSubscription(true));
+  await sync({
+    action: 'setup-all',
+    deviceId: deviceId(),
+    subscription,
+    meals: meals.map((meal) => ({
+      id: meal.id,
+      weekday: meal.day as DayOfWeek,
+      time: meal.time,
+      title: meal.name,
+      foods: meal.foods,
+      icon: meal.icon ?? '🥘',
+    })),
+  });
 }
