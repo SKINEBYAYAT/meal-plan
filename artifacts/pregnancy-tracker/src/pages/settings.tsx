@@ -1,6 +1,6 @@
 import { useSettings } from '../hooks/useSettings';
 import { useNotifications } from '../hooks/useNotifications';
-import { getAllMealsByDay } from '../hooks/useMeals';
+import { getAllMealsByDay, setAllMealRemindersEnabled } from '../hooks/useMeals';
 import {
   requestPushSubscription,
   setMasterReminder,
@@ -96,33 +96,44 @@ export default function SettingsPage() {
   };
 
   const handleNotificationToggle = async (checked: boolean) => {
-    if (checked && permission !== 'granted') {
-      const granted = await requestPermission();
-      if (granted) {
+    try {
+      if (checked) {
+        const granted = permission === 'granted' || await requestPermission();
+        if (!granted) {
+          toast({
+            title: 'Permission denied',
+            description:
+              permission === 'denied'
+                ? 'Go to device settings and allow notifications for this app.'
+                : 'Please allow notifications when prompted.',
+            variant: 'destructive',
+          });
+          return;
+        }
+
         const subscription = await requestPushSubscription();
         if (!subscription) {
           toast({ title: 'Notifications unavailable', description: 'Web Push could not register this device.', variant: 'destructive' });
           return;
         }
-        await Promise.all(Object.values(getAllMealsByDay()).flat()
-          .filter((meal) => meal.reminderEnabled)
-          .map((meal) => syncMealReminder(meal)));
+
+        const meals = setAllMealRemindersEnabled(true);
+        await Promise.all(meals.map((meal) => syncMealReminder(meal)));
         await setMasterReminder(true);
         updateSettings({ notificationsEnabled: true });
-        toast({ title: 'Meal reminders enabled', description: 'Only meals with Reminder ON will notify.' });
+        await sendRemoteTestNotification();
+        toast({ title: 'Meal reminders enabled', description: 'A test notification was sent and all meals are scheduled.' });
       } else {
-        toast({
-          title: 'Permission denied',
-          description:
-            permission === 'denied'
-              ? 'Go to iOS Settings → Safari → Notifications to re-enable.'
-              : 'Please allow notifications when prompted.',
-          variant: 'destructive',
-        });
+        await setMasterReminder(false);
+        updateSettings({ notificationsEnabled: false });
       }
-    } else {
-      await setMasterReminder(checked);
-      updateSettings({ notificationsEnabled: checked });
+    } catch (error) {
+      console.error('[Settings] Failed to update meal reminders:', error);
+      toast({
+        title: 'Could not enable reminders',
+        description: error instanceof Error ? error.message : 'Notification setup failed. Please try again.',
+        variant: 'destructive',
+      });
     }
   };
 

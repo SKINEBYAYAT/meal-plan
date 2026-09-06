@@ -28,10 +28,10 @@ async function getSubscription(): Promise<PushSubscription> {
   return registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: decodeKey(config.publicKey) });
 }
 
-function decodeKey(value: string): Uint8Array {
+function decodeKey(value: string): ArrayBuffer {
   const padding = '='.repeat((4 - value.length % 4) % 4);
   const decoded = atob(value.replace(/-/g, '+').replace(/_/g, '/') + padding);
-  return Uint8Array.from(decoded, (character) => character.charCodeAt(0));
+  return Uint8Array.from(decoded, (character) => character.charCodeAt(0)).buffer;
 }
 
 async function sync(payload: Record<string, unknown>): Promise<void> {

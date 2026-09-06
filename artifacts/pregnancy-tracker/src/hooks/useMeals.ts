@@ -186,6 +186,14 @@ export function getAllMealsByDay(): Record<DayOfWeek, Meal[]> {
   return result;
 }
 
+/** Enable or disable the reminder flag for every meal and persist the change. */
+export function setAllMealRemindersEnabled(enabled: boolean): Meal[] {
+  const all = getCanonicalMeals();
+  for (const meal of Object.values(all)) meal.reminderEnabled = enabled;
+  saveAllMeals(all);
+  return Object.values(all);
+}
+
 export function getMealCountByDay(): Partial<Record<DayOfWeek, number>> {
   const byDay = getAllMealsByDay();
   const counts: Partial<Record<DayOfWeek, number>> = {};
