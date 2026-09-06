@@ -10,7 +10,38 @@ type Reminder = {
   endpoint: string; p256dh: string; auth: string;
 };
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
+function normalizeDatabaseUrl(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+
+  let url = value.trim().replace(/^DATABASE_URL\s*=\s*/i, '').trim();
+  const wrapper = url[0];
+  if ((wrapper === '"' || wrapper === "'" || wrapper === '`') && url.at(-1) === wrapper) {
+    url = url.slice(1, -1).trim();
+  }
+  if (/\[YOUR-PASSWORD\]/i.test(url)) throw new Error('DATABASE_URL still contains the [YOUR-PASSWORD] placeholder.');
+
+  const schemeEnd = url.indexOf('://');
+  const credentialsEnd = url.lastIndexOf('@');
+  if (schemeEnd < 0 || credentialsEnd < schemeEnd) return url;
+
+  const scheme = url.slice(0, schemeEnd);
+  const credentials = url.slice(schemeEnd + 3, credentialsEnd);
+  const passwordStart = credentials.indexOf(':');
+  if (passwordStart < 0) return url;
+
+  const username = credentials.slice(0, passwordStart);
+  const password = credentials.slice(passwordStart + 1);
+  let decodedPassword = password;
+  try {
+    decodedPassword = decodeURIComponent(password);
+  } catch {
+    // Treat malformed percent escapes as literal password characters.
+  }
+
+  return `${scheme}://${username}:${encodeURIComponent(decodedPassword)}@${url.slice(credentialsEnd + 1)}`;
+}
+
+const pool = new Pool({ connectionString: normalizeDatabaseUrl(process.env.DATABASE_URL), max: 1 });
 let tablesReady: Promise<void> | undefined;
 
 function env(name: string): string {
