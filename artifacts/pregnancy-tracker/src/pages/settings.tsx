@@ -204,7 +204,6 @@ export default function SettingsPage() {
               <Switch
                 checked={settings.notificationsEnabled && permission === 'granted'}
                 onCheckedChange={handleNotificationToggle}
-                disabled={!isSupported}
                 className="data-[state=checked]:bg-[#4CAF50]"
               />
             </div>
