@@ -148,9 +148,9 @@ export async function setupAllReminders(deviceId: string, subscription: Subscrip
     await client.query('DELETE FROM push_devices WHERE endpoint = $1 AND device_id <> $2',
       [subscription.endpoint, deviceId]);
     await client.query(`INSERT INTO push_devices (device_id, endpoint, p256dh, auth, master_enabled, updated_at)
-      VALUES ($1, $2, $3, $4, true, now()) ON CONFLICT (device_id) DO UPDATE SET
+      VALUES ($1, $2, $3, $4, false, now()) ON CONFLICT (device_id) DO UPDATE SET
       endpoint = EXCLUDED.endpoint, p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth,
-      master_enabled = true, updated_at = now()`,
+      updated_at = now()`,
       [deviceId, subscription.endpoint, subscription.keys.p256dh, subscription.keys.auth]);
     for (const meal of meals) {
       await client.query(`INSERT INTO meal_reminders

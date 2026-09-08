@@ -9,13 +9,15 @@ declare const self: ServiceWorkerGlobalScope & { __WB_MANIFEST: any[] };
 
 // IMPORTANT: bump this version whenever cached content must be force-refreshed.
 // The activate handler deletes all caches that don't match this name.
-const CACHE_NAME = 'pnt-v3';
+const CACHE_NAME = 'pnt-v4';
 
 // ─── Precache ────────────────────────────────────────────────────────────────
 
 interface ManifestEntry { url: string; revision: string | null }
 const precacheEntries: ManifestEntry[] = self.__WB_MANIFEST;
-const precacheUrls: string[] = precacheEntries.map((e) => e.url);
+// Manifest icons are also matched by globPatterns, so injectManifest may emit
+// the same URL twice. Cache.addAll rejects duplicate request URLs on WebKit.
+const precacheUrls: string[] = [...new Set(precacheEntries.map((entry) => entry.url))];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

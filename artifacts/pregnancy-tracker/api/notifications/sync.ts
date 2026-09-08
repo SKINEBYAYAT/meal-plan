@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getDeviceStatus, registerDevice, removeReminder, setMaster, setupAllReminders, syncReminder } from '../_lib/meal-reminders.js';
+import { describeError, getDeviceStatus, registerDevice, removeReminder, setMaster, setupAllReminders, syncReminder } from '../_lib/meal-reminders.js';
 
 type Body = {
   action: 'sync' | 'remove' | 'master' | 'setup-all' | 'register' | 'status';
@@ -37,6 +37,8 @@ export default async function handler(request: VercelRequest, response: VercelRe
     } else return response.status(400).json({ success: false, error: 'Invalid reminder payload.' });
     return response.status(200).json({ success: true });
   } catch (error) {
-    return response.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+    const message = describeError(error);
+    console.error('[push-sync] failed', { action: body?.action, deviceId: body?.deviceId, error: message });
+    return response.status(500).json({ success: false, error: message });
   }
 }

@@ -47,15 +47,20 @@ export default function SettingsPage() {
   const { permission, requestPermission } = useNotifications();
   const [diagnostics, setDiagnostics] = useState<Awaited<ReturnType<typeof getPushDiagnostic>> | null>(null);
   const [pushResult, setPushResult] = useState('');
+  const [settingUpReminders, setSettingUpReminders] = useState(false);
+  const [setupError, setSetupError] = useState('');
   const [name, setName] = useState(settings.userName);
   const { toast } = useToast();
 
   const refreshDiagnostics = useCallback(async () => {
     try {
-      setDiagnostics(await getPushDiagnostic());
+      const next = await getPushDiagnostic();
+      setDiagnostics(next);
+      return next;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setPushResult(message);
+      return null;
     }
   }, []);
   useEffect(() => { void refreshDiagnostics(); }, [refreshDiagnostics]);
@@ -109,10 +114,15 @@ export default function SettingsPage() {
   };
 
   const handleNotificationToggle = async (checked: boolean) => {
+    if (settingUpReminders) return;
+    setSettingUpReminders(true);
+    setSetupError('');
     try {
       if (checked) {
         const granted = permission === 'granted' || await requestPermission();
         if (!granted) {
+          const denialMessage = 'Notification permission denied';
+          setSetupError(denialMessage);
           toast({
             title: 'Permission denied',
             description:
@@ -126,23 +136,34 @@ export default function SettingsPage() {
 
         const meals = Object.values(getAllMealsByDay()).flat();
         await setupAllMealReminders(meals);
+        const registeredState = await getPushDiagnostic();
+        if (registeredState.backendDevice !== 'registered') throw new Error('Backend device lookup failed after subscription POST');
+        await setMasterReminder(true);
+        const enabledState = await getPushDiagnostic();
+        if (!enabledState.masterEnabled) throw new Error('Backend did not save master_enabled = true');
+        setDiagnostics(enabledState);
         updateSettings({ notificationsEnabled: true });
-        await refreshDiagnostics();
         toast({ title: 'Meal reminders enabled', description: 'Enabled meals are now scheduled for this device.' });
       } else {
         await setMasterReminder(false);
+        const disabledState = await getPushDiagnostic();
+        if (disabledState.masterEnabled) throw new Error('Backend did not save master_enabled = false');
+        setDiagnostics(disabledState);
         updateSettings({ notificationsEnabled: false });
-        await refreshDiagnostics();
       }
     } catch (error) {
       console.error('[Settings] Failed to update meal reminders:', error);
+      const message = error instanceof Error ? error.message : 'Notification setup failed. Please try again.';
+      setSetupError(message);
       toast({
         title: 'Could not enable reminders',
-        description: error instanceof Error ? error.message : 'Notification setup failed. Please try again.',
+        description: message,
         variant: 'destructive',
       });
       updateSettings({ notificationsEnabled: false });
       await refreshDiagnostics();
+    } finally {
+      setSettingUpReminders(false);
     }
   };
 
@@ -220,9 +241,12 @@ export default function SettingsPage() {
               <Switch
                 checked={Boolean(diagnostics?.masterEnabled && diagnostics.backendDevice === 'registered' && diagnostics.subscription === 'registered' && diagnostics.permission === 'granted')}
                 onCheckedChange={handleNotificationToggle}
+                disabled={settingUpReminders}
                 className="data-[state=checked]:bg-[#4CAF50]"
               />
             </div>
+            {settingUpReminders && <div className="px-4 pb-3 text-xs text-blue-300">Setting up...</div>}
+            {setupError && !settingUpReminders && <div className="px-4 pb-3 text-xs text-red-400 break-words">Last setup error: {setupError}</div>}
 
             <div className="p-4 grid grid-cols-2 gap-x-4 gap-y-2 text-xs text-gray-400">
               <span>PWA Installed</span><strong className="text-right text-gray-200">{diagnostics?.pwaInstalled ? 'Yes' : 'No'}</strong>
@@ -233,6 +257,18 @@ export default function SettingsPage() {
               <span>Backend Device Record</span><strong className="text-right text-gray-200">{diagnostics?.backendDevice ?? 'missing'}</strong>
               <span>Master Meal Reminders</span><strong className="text-right text-gray-200">{diagnostics?.masterEnabled ? 'on' : 'off'}</strong>
               <span>Next reminder</span><strong className="text-right text-gray-200">{nextReminderLabel(Boolean(diagnostics?.masterEnabled))}</strong>
+              <span>SW Registrations</span><strong className="text-right text-gray-200">{diagnostics?.registrationCount ?? 0}</strong>
+              <span>SW Script URL</span><strong className="text-right text-gray-200 break-all">{diagnostics?.scriptUrl ?? 'none'}</strong>
+              <span>SW Scope</span><strong className="text-right text-gray-200 break-all">{diagnostics?.scope ?? 'none'}</strong>
+              <span>Installing State</span><strong className="text-right text-gray-200">{diagnostics?.installingState ?? 'none'}</strong>
+              <span>Waiting State</span><strong className="text-right text-gray-200">{diagnostics?.waitingState ?? 'none'}</strong>
+              <span>Active State</span><strong className="text-right text-gray-200">{diagnostics?.activeState ?? 'none'}</strong>
+              <span>Controller Present</span><strong className="text-right text-gray-200">{diagnostics?.controllerPresent ? 'Yes' : 'No'}</strong>
+              <span>PushManager Available</span><strong className="text-right text-gray-200">{diagnostics?.pushManagerAvailable ? 'Yes' : 'No'}</strong>
+              <span>VAPID Public Key Loaded</span><strong className="text-right text-gray-200">{diagnostics?.vapidPublicKeyLoaded ? 'Yes' : 'No'}</strong>
+              <span>Subscription POST</span><strong className="text-right text-gray-200 break-words">{diagnostics?.subscriptionPostStatus ?? 'not attempted'}</strong>
+              <span>Backend Lookup</span><strong className="text-right text-gray-200 break-words">{diagnostics?.backendLookupStatus ?? 'not attempted'}</strong>
+              <span>Last Setup Error</span><strong className="text-right text-gray-200 break-words">{setupError || diagnostics?.lastSetupError || 'none'}</strong>
             </div>
 
             <div className="flex items-center justify-between p-4">
