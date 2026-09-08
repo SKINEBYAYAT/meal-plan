@@ -1,7 +1,8 @@
 import { useSettings } from '../hooks/useSettings';
 import { useNotifications } from '../hooks/useNotifications';
-import { getAllMealsByDay, setAllMealRemindersEnabled } from '../hooks/useMeals';
+import { getAllMealsByDay } from '../hooks/useMeals';
 import {
+  getPushDiagnostic,
   requestPushSubscription,
   setupAllMealReminders,
   setMasterReminder,
@@ -10,7 +11,7 @@ import {
 import { Bell, User, Heart, Download, Upload, Trash2, ChevronRight, Bug } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -43,9 +44,21 @@ function nextReminderLabel(enabled: boolean): string {
 
 export default function SettingsPage() {
   const { settings, updateSettings } = useSettings();
-  const { permission, isSupported, swStatus, requestPermission } = useNotifications();
+  const { permission, requestPermission } = useNotifications();
+  const [diagnostics, setDiagnostics] = useState<Awaited<ReturnType<typeof getPushDiagnostic>> | null>(null);
+  const [pushResult, setPushResult] = useState('');
   const [name, setName] = useState(settings.userName);
   const { toast } = useToast();
+
+  const refreshDiagnostics = useCallback(async () => {
+    try {
+      setDiagnostics(await getPushDiagnostic());
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setPushResult(message);
+    }
+  }, []);
+  useEffect(() => { void refreshDiagnostics(); }, [refreshDiagnostics]);
 
   const handleNameSave = () => {
     updateSettings({ userName: name });
@@ -111,23 +124,15 @@ export default function SettingsPage() {
           return;
         }
 
-        const meals = setAllMealRemindersEnabled(true);
+        const meals = Object.values(getAllMealsByDay()).flat();
         await setupAllMealReminders(meals);
         updateSettings({ notificationsEnabled: true });
-        try {
-          await sendRemoteTestNotification();
-          toast({ title: 'Meal reminders enabled', description: 'A test notification was sent and all meals are scheduled.' });
-        } catch (testError) {
-          console.error('[Settings] Reminder setup succeeded but test push failed:', testError);
-          toast({
-            title: 'Reminders scheduled',
-            description: testError instanceof Error ? `Test notification failed: ${testError.message}` : 'Test notification failed.',
-            variant: 'destructive',
-          });
-        }
+        await refreshDiagnostics();
+        toast({ title: 'Meal reminders enabled', description: 'Enabled meals are now scheduled for this device.' });
       } else {
         await setMasterReminder(false);
         updateSettings({ notificationsEnabled: false });
+        await refreshDiagnostics();
       }
     } catch (error) {
       console.error('[Settings] Failed to update meal reminders:', error);
@@ -136,25 +141,34 @@ export default function SettingsPage() {
         description: error instanceof Error ? error.message : 'Notification setup failed. Please try again.',
         variant: 'destructive',
       });
+      updateSettings({ notificationsEnabled: false });
+      await refreshDiagnostics();
     }
   };
 
   const handleTestNotification = useCallback(async () => {
     try {
-      await requestPushSubscription();
+      const subscription = await requestPushSubscription();
+      if (!subscription) throw new Error('Notification permission denied');
     } catch (error) {
-      toast({ title: 'Could not enable reminders', description: 'Grant notification permission first.', variant: 'destructive' });
+      const message = error instanceof Error ? error.message : String(error);
+      setPushResult(message);
+      toast({ title: 'Test notification failed', description: message, variant: 'destructive' });
       return;
     }
     try {
-      await sendRemoteTestNotification();
-      toast({ title: 'Test notification sent', description: 'Check your notification tray.' });
+      const result = await sendRemoteTestNotification();
+      const detail = JSON.stringify(result);
+      setPushResult(detail);
+      toast({ title: 'Test notification sent', description: detail });
     } catch (err) {
       console.error('[Settings] Failed to send test notification:', err);
       const message = err instanceof Error ? err.message : String(err);
+      setPushResult(message);
       toast({ title: 'Test notification failed', description: message, variant: 'destructive' });
     }
-  }, [toast]);
+    await refreshDiagnostics();
+  }, [refreshDiagnostics, toast]);
 
 
   return (
@@ -204,15 +218,21 @@ export default function SettingsPage() {
                 </div>
               </div>
               <Switch
-                checked={settings.notificationsEnabled && permission === 'granted'}
+                checked={Boolean(diagnostics?.masterEnabled && diagnostics.backendDevice === 'registered' && diagnostics.subscription === 'registered' && diagnostics.permission === 'granted')}
                 onCheckedChange={handleNotificationToggle}
                 className="data-[state=checked]:bg-[#4CAF50]"
               />
             </div>
 
             <div className="p-4 grid grid-cols-2 gap-x-4 gap-y-2 text-xs text-gray-400">
-              <span>Push notifications</span><strong className="text-right text-gray-200">{isSupported && permission === 'granted' && swStatus === 'registered' ? 'Ready' : 'Not ready'}</strong>
-              <span>Next reminder</span><strong className="text-right text-gray-200">{nextReminderLabel(settings.notificationsEnabled)}</strong>
+              <span>PWA Installed</span><strong className="text-right text-gray-200">{diagnostics?.pwaInstalled ? 'Yes' : 'No'}</strong>
+              <span>Notifications Supported</span><strong className="text-right text-gray-200">{diagnostics?.supported ? 'Yes' : 'No'}</strong>
+              <span>Permission</span><strong className="text-right text-gray-200">{diagnostics?.permission ?? permission}</strong>
+              <span>Service Worker</span><strong className="text-right text-gray-200">{diagnostics?.serviceWorker ?? 'inactive'}</strong>
+              <span>Push Subscription</span><strong className="text-right text-gray-200">{diagnostics?.subscription ?? 'missing'}</strong>
+              <span>Backend Device Record</span><strong className="text-right text-gray-200">{diagnostics?.backendDevice ?? 'missing'}</strong>
+              <span>Master Meal Reminders</span><strong className="text-right text-gray-200">{diagnostics?.masterEnabled ? 'on' : 'off'}</strong>
+              <span>Next reminder</span><strong className="text-right text-gray-200">{nextReminderLabel(Boolean(diagnostics?.masterEnabled))}</strong>
             </div>
 
             <div className="flex items-center justify-between p-4">
@@ -224,6 +244,7 @@ export default function SettingsPage() {
                 Test
               </Button>
             </div>
+            {pushResult && <div className="px-4 pb-3 text-xs text-gray-300 break-words">Backend result: {pushResult}</div>}
 
             {permission === 'denied' && (
               <div className="px-4 py-3 bg-amber-500/5">

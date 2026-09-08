@@ -9,7 +9,7 @@ declare const self: ServiceWorkerGlobalScope & { __WB_MANIFEST: any[] };
 
 // IMPORTANT: bump this version whenever cached content must be force-refreshed.
 // The activate handler deletes all caches that don't match this name.
-const CACHE_NAME = 'pnt-v2';
+const CACHE_NAME = 'pnt-v3';
 
 // ─── Precache ────────────────────────────────────────────────────────────────
 
@@ -71,12 +71,13 @@ self.addEventListener('fetch', (event) => {
 
 self.addEventListener('push', (event) => {
   const payload = event.data?.json() as { title?: string; body?: string; mealId?: string } | undefined;
+  console.log('[service-worker] push received', { mealId: payload?.mealId ?? null });
   event.waitUntil(self.registration.showNotification(payload?.title ?? 'Meal Plan Reminder', {
     body: payload?.body ?? '',
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-192.png',
     data: { mealId: payload?.mealId },
-  }));
+  }).then(() => console.log('[service-worker] notification displayed', { mealId: payload?.mealId ?? null })));
 });
 
 // ─── Notification click → open / focus app, deep-link to meal ────────────────

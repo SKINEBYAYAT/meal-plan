@@ -1,5 +1,6 @@
 import { Pool } from 'pg';
 import webpush from 'web-push';
+import { createECDH } from 'node:crypto';
 
 type DayOfWeek = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
 type Subscription = { endpoint: string; keys: { p256dh: string; auth: string } };
@@ -69,7 +70,13 @@ async function ensureTables(): Promise<void> {
 }
 
 function configurePush(): void {
-  webpush.setVapidDetails(env('VAPID_SUBJECT'), env('VAPID_PUBLIC_KEY'), env('VAPID_PRIVATE_KEY'));
+  const publicKey = env('VAPID_PUBLIC_KEY');
+  const privateKey = env('VAPID_PRIVATE_KEY');
+  const ecdh = createECDH('prime256v1');
+  ecdh.setPrivateKey(Buffer.from(privateKey, 'base64url'));
+  const derivedPublicKey = ecdh.getPublicKey().toString('base64url');
+  if (derivedPublicKey !== publicKey) throw new Error('VAPID public/private key mismatch');
+  webpush.setVapidDetails(env('VAPID_SUBJECT'), publicKey, privateKey);
 }
 
 export function assertCronSecret(authorization: string | undefined): void {
@@ -80,7 +87,6 @@ export function describeError(error: unknown): string {
   const rawMessage = error instanceof Error ? error.message : String(error);
   const message = rawMessage.replace(/postgres(?:ql)?:\/\/\S+/gi, 'postgresql://[redacted]');
   if (message === 'Unauthorized') return 'Unauthorized cron request.';
-  if (message.includes('410') || message.includes('404')) return 'Push subscription is expired or no longer registered.';
   return message;
 }
 
@@ -133,12 +139,14 @@ function due(reminder: Reminder, now: string): boolean {
 }
 
 export async function setupAllReminders(deviceId: string, subscription: Subscription, meals: Array<{
-  id: string; weekday: DayOfWeek; time: string; title: string; foods: string[]; icon?: string;
+  id: string; weekday: DayOfWeek; time: string; title: string; foods: string[]; icon?: string; enabled: boolean;
 }>): Promise<void> {
   await ensureTables();
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    await client.query('DELETE FROM push_devices WHERE endpoint = $1 AND device_id <> $2',
+      [subscription.endpoint, deviceId]);
     await client.query(`INSERT INTO push_devices (device_id, endpoint, p256dh, auth, master_enabled, updated_at)
       VALUES ($1, $2, $3, $4, true, now()) ON CONFLICT (device_id) DO UPDATE SET
       endpoint = EXCLUDED.endpoint, p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth,
@@ -147,11 +155,11 @@ export async function setupAllReminders(deviceId: string, subscription: Subscrip
     for (const meal of meals) {
       await client.query(`INSERT INTO meal_reminders
         (id, device_id, meal_id, weekday, time, title, foods, icon, enabled, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, now()) ON CONFLICT (id) DO UPDATE SET
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now()) ON CONFLICT (id) DO UPDATE SET
         weekday = EXCLUDED.weekday, time = EXCLUDED.time, title = EXCLUDED.title,
-        foods = EXCLUDED.foods, icon = EXCLUDED.icon, enabled = true, updated_at = now()`,
+        foods = EXCLUDED.foods, icon = EXCLUDED.icon, enabled = EXCLUDED.enabled, updated_at = now()`,
         [`${deviceId}__${meal.id}`, deviceId, meal.id, meal.weekday, meal.time,
-          meal.title, JSON.stringify(meal.foods), meal.icon ?? '🥘']);
+          meal.title, JSON.stringify(meal.foods), meal.icon ?? '🥘', meal.enabled]);
     }
     await client.query('COMMIT');
   } catch (error) {
@@ -160,6 +168,32 @@ export async function setupAllReminders(deviceId: string, subscription: Subscrip
   } finally {
     client.release();
   }
+}
+
+export async function registerDevice(deviceId: string, subscription: Subscription): Promise<void> {
+  await ensureTables();
+  await pool.query('DELETE FROM push_devices WHERE endpoint = $1 AND device_id <> $2',
+    [subscription.endpoint, deviceId]);
+  await pool.query(`INSERT INTO push_devices (device_id, endpoint, p256dh, auth, updated_at)
+    VALUES ($1, $2, $3, $4, now()) ON CONFLICT (device_id) DO UPDATE SET
+    endpoint = EXCLUDED.endpoint, p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth, updated_at = now()`,
+    [deviceId, subscription.endpoint, subscription.keys.p256dh, subscription.keys.auth]);
+}
+
+export async function getDeviceStatus(deviceId: string, endpoint: string): Promise<{
+  registered: boolean; masterEnabled: boolean; reminderCount: number; enabledReminderCount: number;
+}> {
+  await ensureTables();
+  const { rows } = await pool.query<{ master_enabled: boolean; reminder_count: string; enabled_reminder_count: string }>(
+    `SELECT d.master_enabled, count(r.id)::text AS reminder_count,
+      count(r.id) FILTER (WHERE r.enabled = true)::text AS enabled_reminder_count
+     FROM push_devices d LEFT JOIN meal_reminders r ON r.device_id = d.device_id
+     WHERE d.device_id = $1 AND d.endpoint = $2 GROUP BY d.device_id, d.master_enabled`,
+    [deviceId, endpoint],
+  );
+  const row = rows[0];
+  return { registered: Boolean(row), masterEnabled: row?.master_enabled === true,
+    reminderCount: Number(row?.reminder_count ?? 0), enabledReminderCount: Number(row?.enabled_reminder_count ?? 0) };
 }
 
 function parseFoods(value: string): string[] {
@@ -175,9 +209,18 @@ export async function processDueReminders(): Promise<number> {
   await ensureTables();
   configurePush();
   const current = currentBeirut();
+  const counts = await pool.query<{ device_count: string; master_count: string }>(`SELECT
+    count(*)::text AS device_count,
+    count(*) FILTER (WHERE master_enabled = true)::text AS master_count FROM push_devices`);
+  console.log('[cron] invoked', { weekday: current.weekday, time: current.time,
+    deviceCount: Number(counts.rows[0]?.device_count ?? 0),
+    masterEnabledCount: Number(counts.rows[0]?.master_count ?? 0) });
   const { rows } = await pool.query<Reminder>(`SELECT r.*, d.endpoint, d.p256dh, d.auth
     FROM meal_reminders r JOIN push_devices d ON d.device_id = r.device_id
     WHERE r.enabled = true AND d.master_enabled = true AND r.weekday = $1`, [current.weekday]);
+  const dueRows = rows.filter((reminder) => due(reminder, current.time)
+    && !(reminder.last_sent_date === current.date && reminder.last_sent_time === reminder.time));
+  console.log('[cron] reminders loaded', { enabledForToday: rows.length, dueReminderCount: dueRows.length });
   let processed = 0;
   for (const reminder of rows) {
     if (!due(reminder, current.time) || (reminder.last_sent_date === current.date && reminder.last_sent_time === reminder.time)) continue;
@@ -186,14 +229,19 @@ export async function processDueReminders(): Promise<number> {
     if (!claim.rowCount) continue;
     const body = ["Today's meal:", ...parseFoods(reminder.foods).map((food) => `• ${food}`)].join('\n');
     try {
-      await webpush.sendNotification({ endpoint: reminder.endpoint, keys: { p256dh: reminder.p256dh, auth: reminder.auth } }, JSON.stringify({
+      console.log('[cron] push attempted', { deviceId: reminder.device_id, mealId: reminder.meal_id });
+      const result = await webpush.sendNotification({ endpoint: reminder.endpoint, keys: { p256dh: reminder.p256dh, auth: reminder.auth } }, JSON.stringify({
         title: `${reminder.icon} ${reminder.title}`, body, mealId: reminder.meal_id,
       }));
+      console.log('[cron] push succeeded', { deviceId: reminder.device_id, mealId: reminder.meal_id, statusCode: result.statusCode });
       await pool.query('UPDATE meal_reminders SET updated_at = now() WHERE id = $1', [reminder.id]);
       processed += 1;
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (message.includes('410') || message.includes('404')) await pool.query('DELETE FROM push_devices WHERE device_id = $1', [reminder.device_id]);
+      const pushError = error as Error & { statusCode?: number; body?: string };
+      const message = pushError.message ?? String(error);
+      console.error('[cron] push failed', { deviceId: reminder.device_id, mealId: reminder.meal_id,
+        statusCode: pushError.statusCode, error: message, responseBody: pushError.body });
+      if (pushError.statusCode === 410 || pushError.statusCode === 404 || message.includes('410') || message.includes('404')) await pool.query('DELETE FROM push_devices WHERE device_id = $1', [reminder.device_id]);
       else await pool.query('UPDATE meal_reminders SET last_sent_date = NULL, last_sent_time = NULL WHERE id = $1', [reminder.id]);
     }
   }
@@ -203,6 +251,35 @@ export async function processDueReminders(): Promise<number> {
 export async function sendTestPush(subscription: Subscription): Promise<void> {
   configurePush();
   await webpush.sendNotification(subscription, JSON.stringify({ title: 'Meal Plan Reminder', body: 'Your standard Web Push notifications are working.', mealId: 'test' }));
+}
+
+export async function sendTestPushForDevice(deviceId: string, currentSubscription?: Subscription): Promise<number> {
+  await ensureTables();
+  configurePush();
+  const { rows } = await pool.query<{ endpoint: string; p256dh: string; auth: string }>(
+    'SELECT endpoint, p256dh, auth FROM push_devices WHERE device_id = $1', [deviceId]);
+  const row = rows[0];
+  if (!row) throw new Error('Device not registered');
+  if (currentSubscription && currentSubscription.endpoint !== row.endpoint) {
+    throw new Error('Push subscription does not match the registered device. Turn Meal Reminders on again to resubscribe.');
+  }
+  try {
+    const result = await webpush.sendNotification(
+      { endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } },
+      JSON.stringify({ title: 'Meal Plan Reminder', body: 'Your Web Push notifications are working.', mealId: 'test' }),
+    );
+    console.log('[push-test] succeeded', { deviceId, statusCode: result.statusCode });
+    return result.statusCode;
+  } catch (error) {
+    const pushError = error as Error & { statusCode?: number; body?: string };
+    console.error('[push-test] failed', { deviceId, statusCode: pushError.statusCode,
+      error: pushError.message, responseBody: pushError.body });
+    if (pushError.statusCode === 404 || pushError.statusCode === 410) {
+      await pool.query('DELETE FROM push_devices WHERE device_id = $1', [deviceId]);
+      throw new Error(`Web Push returned ${pushError.statusCode}; subscription removed. Turn Meal Reminders on again to resubscribe.`);
+    }
+    throw error;
+  }
 }
 
 export async function removeStaleSubscription(endpoint: string): Promise<void> {

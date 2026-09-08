@@ -1,8 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { removeReminder, setMaster, setupAllReminders, syncReminder } from '../_lib/meal-reminders.js';
+import { getDeviceStatus, registerDevice, removeReminder, setMaster, setupAllReminders, syncReminder } from '../_lib/meal-reminders.js';
 
 type Body = {
-  action: 'sync' | 'remove' | 'master' | 'setup-all';
+  action: 'sync' | 'remove' | 'master' | 'setup-all' | 'register' | 'status';
   deviceId: string;
   subscription?: { endpoint: string; keys: { p256dh: string; auth: string } };
   mealId?: string;
@@ -12,7 +12,7 @@ type Body = {
   foods?: string[];
   icon?: string;
   enabled?: boolean;
-  meals?: Array<{ id: string; weekday: string; time: string; title: string; foods: string[]; icon?: string }>;
+  meals?: Array<{ id: string; weekday: string; time: string; title: string; foods: string[]; icon?: string; enabled: boolean }>;
 };
 
 export default async function handler(request: VercelRequest, response: VercelResponse) {
@@ -20,8 +20,14 @@ export default async function handler(request: VercelRequest, response: VercelRe
   const body = request.body as Body;
   try {
     if (!body?.deviceId || !body.subscription) return response.status(400).json({ success: false, error: 'Device ID and push subscription are required.' });
-    if (body.action === 'setup-all' && Array.isArray(body.meals) && body.meals.length > 0) {
-      const valid = body.meals.every((meal) => meal?.id && meal.weekday && meal.time && meal.title && Array.isArray(meal.foods));
+    if (body.action === 'status') {
+      const status = await getDeviceStatus(body.deviceId, body.subscription.endpoint);
+      return response.status(200).json({ success: true, ...status });
+    } else if (body.action === 'register') {
+      await registerDevice(body.deviceId, body.subscription);
+    } else if (body.action === 'setup-all' && Array.isArray(body.meals) && body.meals.length > 0) {
+      const valid = body.meals.every((meal) => meal?.id && meal.weekday && meal.time && meal.title
+        && Array.isArray(meal.foods) && typeof meal.enabled === 'boolean');
       if (!valid) return response.status(400).json({ success: false, error: 'Invalid meal reminder list.' });
       await setupAllReminders(body.deviceId, body.subscription, body.meals.map((meal) => ({ ...meal, weekday: meal.weekday as never })));
     } else if (body.action === 'remove' && body.mealId) await removeReminder(body.deviceId, body.mealId);
