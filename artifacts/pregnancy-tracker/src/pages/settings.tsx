@@ -19,27 +19,51 @@ import { Link } from 'wouter';
 import { MEAL_PLAN_KEY, COMPLETIONS_KEY, MEAL_DELETIONS_KEY, HABITS_KEY, HABIT_LOGS_KEY, STREAKS_KEY, SETTINGS_KEY } from '../lib/storage';
 
 const BEIRUT_DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+const MINUTES_PER_DAY = 24 * 60;
+const MINUTES_PER_WEEK = 7 * MINUTES_PER_DAY;
 
-function nextReminderLabel(enabled: boolean): string {
+function timeInMinutes(time: string): number | null {
+  const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(time);
+  if (!match) return null;
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+function displayMealTime(time: string): string {
+  const minutes = timeInMinutes(time);
+  if (minutes === null) return time;
+  const hour = Math.floor(minutes / 60);
+  const minute = minutes % 60;
+  return `${hour % 12 || 12}:${String(minute).padStart(2, '0')} ${hour < 12 ? 'AM' : 'PM'}`;
+}
+
+function nextReminderLabel(enabled: boolean, now = new Date()): string {
   if (!enabled) return 'None scheduled';
   const meals = Object.values(getAllMealsByDay()).flat().filter((meal) => meal.reminderEnabled);
   if (meals.length === 0) return 'None scheduled';
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: 'Asia/Beirut', weekday: 'long', hour: '2-digit', minute: '2-digit', hour12: false,
-  }).formatToParts(new Date());
+  }).formatToParts(now);
   const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
   const today = BEIRUT_DAYS.indexOf(values.weekday.toLowerCase());
+  if (today < 0) return 'None scheduled';
   const currentMinutes = Number(values.hour === '24' ? '0' : values.hour) * 60 + Number(values.minute);
-  for (let offset = 0; offset < 7; offset += 1) {
-    const day = BEIRUT_DAYS[(today + offset) % 7];
-    const candidate = meals.filter((meal) => meal.day === day && (offset > 0 || meal.time > `${String(Math.floor(currentMinutes / 60)).padStart(2, '0')}:${String(currentMinutes % 60).padStart(2, '0')}`)).sort((a, b) => a.time.localeCompare(b.time))[0];
-    if (candidate) {
-      const [hour, minute] = candidate.time.split(':').map(Number);
-      const formatted = new Date(2000, 0, 1, hour, minute).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-      return `${candidate.name} · ${formatted}`;
+  const currentWeekMinute = today * MINUTES_PER_DAY + currentMinutes;
+  let next: (typeof meals)[number] | null = null;
+  let shortestWait = Number.POSITIVE_INFINITY;
+
+  for (const meal of meals) {
+    const day = BEIRUT_DAYS.indexOf(meal.day);
+    const mealMinutes = timeInMinutes(meal.time);
+    if (day < 0 || mealMinutes === null) continue;
+    const mealWeekMinute = day * MINUTES_PER_DAY + mealMinutes;
+    const wait = (mealWeekMinute - currentWeekMinute + MINUTES_PER_WEEK) % MINUTES_PER_WEEK;
+    if (wait < shortestWait) {
+      next = meal;
+      shortestWait = wait;
     }
   }
-  return 'None scheduled';
+
+  return next ? `${next.name} · ${displayMealTime(next.time)}` : 'None scheduled';
 }
 
 export default function SettingsPage() {

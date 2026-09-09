@@ -36,6 +36,13 @@ function isValidMeal(value: unknown): value is Meal {
   );
 }
 
+/** Preserve an explicit saved choice; meals without one inherit the ON default. */
+function reminderPreference(value: Meal): boolean {
+  return typeof (value as { reminderEnabled?: unknown }).reminderEnabled === 'boolean'
+    ? value.reminderEnabled
+    : true;
+}
+
 // ─── Canonical meals — the bundled 42 defaults are ALWAYS present ─────────────
 //
 // The 42 default meals are authoritative and always render. Stored data can:
@@ -64,10 +71,15 @@ function getCanonicalMeals(): Record<string, Meal> {
             // Default IDs may be customized but must stay on their weekday
             const canonical = DEFAULT_WEEKLY_MEALS[id];
             if (value.day === canonical.day) {
-              result[id] = { ...value, id, day: canonical.day };
+              result[id] = {
+                ...value,
+                id,
+                day: canonical.day,
+                reminderEnabled: reminderPreference(value),
+              };
             }
           } else {
-            result[id] = value;
+            result[id] = { ...value, reminderEnabled: reminderPreference(value) };
           }
         }
       }

@@ -37,7 +37,7 @@ function meal(day: DayOfWeek, type: BuiltInMealType, foods: string[]): DefaultMe
     time: TIMES[type],
     foods,
     notes: '',
-    reminderEnabled: false,
+    reminderEnabled: true,
   };
 }
 

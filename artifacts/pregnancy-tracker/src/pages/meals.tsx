@@ -49,7 +49,7 @@ export default function MealsPage() {
   const [editTime, setEditTime] = useState('');
   const [editFoods, setEditFoods] = useState('');
   const [editNotes, setEditNotes] = useState('');
-  const [editReminderEnabled, setEditReminderEnabled] = useState(false);
+  const [editReminderEnabled, setEditReminderEnabled] = useState(true);
 
   const meals = [...dayPlan.meals].sort((a, b) => a.time.localeCompare(b.time));
 
@@ -113,7 +113,7 @@ export default function MealsPage() {
         setEditTime(defaultTime);
         setEditFoods('');
         setEditNotes('');
-        setEditReminderEnabled(false);
+        setEditReminderEnabled(true);
         setSelectedMeal({
           id: `${selectedDay}-${Date.now()}`,
           day: selectedDay,
@@ -122,7 +122,7 @@ export default function MealsPage() {
           time: defaultTime,
           foods: [],
           notes: '',
-          reminderEnabled: false,
+          reminderEnabled: true,
           completed: false,
         });
       }
@@ -206,7 +206,7 @@ export default function MealsPage() {
       id: `${selectedMeal.day}-${Date.now()}`,
       name: `${selectedMeal.name} (Copy)`,
       completed: false,
-      reminderEnabled: false,
+      reminderEnabled: true,
     };
     updateMeal(dup);
     setSelectedMeal(null);
