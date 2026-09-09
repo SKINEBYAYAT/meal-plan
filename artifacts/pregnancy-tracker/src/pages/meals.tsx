@@ -209,8 +209,13 @@ export default function MealsPage() {
       reminderEnabled: true,
     };
     updateMeal(dup);
+    if (permission === 'granted') {
+      void syncMealReminder(dup).catch((error) => {
+        console.error('[Meals] Failed to sync duplicated reminder:', error);
+      });
+    }
     setSelectedMeal(null);
-  }, [selectedMeal, updateMeal]);
+  }, [selectedMeal, updateMeal, permission]);
 
   const removeMeal = useCallback(() => {
     if (!selectedMeal) return;

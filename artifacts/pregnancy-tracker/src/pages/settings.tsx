@@ -11,7 +11,7 @@ import {
 import { Bell, User, Heart, Download, Upload, Trash2, ChevronRight, Bug } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -21,6 +21,7 @@ import { MEAL_PLAN_KEY, COMPLETIONS_KEY, MEAL_DELETIONS_KEY, HABITS_KEY, HABIT_L
 const BEIRUT_DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 const MINUTES_PER_DAY = 24 * 60;
 const MINUTES_PER_WEEK = 7 * MINUTES_PER_DAY;
+const REMINDER_DEFAULTS_SYNC_KEY = 'pregnancy_tracker_reminder_defaults_v1_synced';
 
 function timeInMinutes(time: string): number | null {
   const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(time);
@@ -74,6 +75,7 @@ export default function SettingsPage() {
   const [settingUpReminders, setSettingUpReminders] = useState(false);
   const [setupError, setSetupError] = useState('');
   const [name, setName] = useState(settings.userName);
+  const syncingReminderDefaults = useRef(false);
   const { toast } = useToast();
 
   const refreshDiagnostics = useCallback(async () => {
@@ -88,6 +90,29 @@ export default function SettingsPage() {
     }
   }, []);
   useEffect(() => { void refreshDiagnostics(); }, [refreshDiagnostics]);
+  useEffect(() => {
+    const canReconcile = diagnostics?.masterEnabled
+      && diagnostics.subscription === 'registered'
+      && diagnostics.backendDevice === 'registered';
+    if (!canReconcile
+      || syncingReminderDefaults.current
+      || localStorage.getItem(REMINDER_DEFAULTS_SYNC_KEY) === 'true') return;
+
+    syncingReminderDefaults.current = true;
+    const meals = Object.values(getAllMealsByDay()).flat();
+    void setupAllMealReminders(meals)
+      .then(async () => {
+        localStorage.setItem(REMINDER_DEFAULTS_SYNC_KEY, 'true');
+        await refreshDiagnostics();
+      })
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        setSetupError(message);
+      })
+      .finally(() => {
+        syncingReminderDefaults.current = false;
+      });
+  }, [diagnostics?.backendDevice, diagnostics?.masterEnabled, diagnostics?.subscription, refreshDiagnostics]);
 
   const handleNameSave = () => {
     updateSettings({ userName: name });
@@ -160,6 +185,7 @@ export default function SettingsPage() {
 
         const meals = Object.values(getAllMealsByDay()).flat();
         await setupAllMealReminders(meals);
+        localStorage.setItem(REMINDER_DEFAULTS_SYNC_KEY, 'true');
         const registeredState = await getPushDiagnostic();
         if (registeredState.backendDevice !== 'registered') throw new Error('Backend device lookup failed after subscription POST');
         await setMasterReminder(true);
