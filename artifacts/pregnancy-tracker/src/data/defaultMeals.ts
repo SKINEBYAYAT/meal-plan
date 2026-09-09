@@ -6,6 +6,7 @@
  */
 
 import { DayOfWeek, Meal, MealType } from '../types';
+import { getCurrentWeeklyDinners } from './dinnerPool';
 
 type DefaultMeal = Omit<Meal, 'completed'>;
 type BuiltInMealType = Exclude<MealType, 'custom'>;
@@ -113,5 +114,21 @@ export const DEFAULT_WEEKLY_MEALS: Record<string, DefaultMeal> = Object.fromEntr
     return [item.id, item];
   })),
 );
+
+export function getCurrentDefaultWeeklyMeals(): Record<string, DefaultMeal> {
+  const result: Record<string, DefaultMeal> = Object.fromEntries(
+    Object.entries(DEFAULT_WEEKLY_MEALS).map(([id, item]) => [
+      id,
+      { ...item, foods: [...item.foods] },
+    ]),
+  );
+  const weeklyDinners = getCurrentWeeklyDinners();
+  for (const day of DAYS) {
+    const id = `${day}-dinner`;
+    const dinner = weeklyDinners[day];
+    result[id] = { ...result[id], name: dinner.name, foods: [...dinner.foods] };
+  }
+  return result;
+}
 
 export const DEFAULT_MEAL_COUNT = Object.keys(DEFAULT_WEEKLY_MEALS).length;

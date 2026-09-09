@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { MEAL_PLAN_KEY, COMPLETIONS_KEY, MEAL_DELETIONS_KEY, HABITS_KEY, HABIT_LOGS_KEY, STREAKS_KEY, SETTINGS_KEY } from '../lib/storage';
+import { DINNER_REMINDER_SYNC_STORAGE_KEY, DINNER_ROTATION_STORAGE_KEY } from '../data/dinnerPool';
 
 const BEIRUT_DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 const MINUTES_PER_DAY = 24 * 60;
@@ -389,6 +390,7 @@ export default function SettingsPage() {
                 if (confirm('Delete all data? This cannot be undone.')) {
                   [
                     MEAL_PLAN_KEY, COMPLETIONS_KEY, MEAL_DELETIONS_KEY,
+                    DINNER_ROTATION_STORAGE_KEY, DINNER_REMINDER_SYNC_STORAGE_KEY,
                     HABITS_KEY, HABIT_LOGS_KEY, STREAKS_KEY, SETTINGS_KEY,
                     // legacy keys that may still be present from older versions
                     'pregnancy_tracker_meals_v2', 'pregnancy_tracker_meals',

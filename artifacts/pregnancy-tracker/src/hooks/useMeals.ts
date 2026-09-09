@@ -6,7 +6,8 @@ import {
   MEAL_PLAN_KEY,
   COMPLETIONS_KEY,
 } from '../lib/storage';
-import { DEFAULT_WEEKLY_MEALS } from '../data/defaultMeals';
+import { DEFAULT_WEEKLY_MEALS, getCurrentDefaultWeeklyMeals } from '../data/defaultMeals';
+import { getBeirutWeekKey } from '../data/dinnerPool';
 
 // ─── Cross-component reactivity ───────────────────────────────────────────────
 
@@ -52,9 +53,10 @@ function reminderPreference(value: Meal): boolean {
 // default day always shows its 6 meals. No seed system, no migrations needed.
 
 function getCanonicalMeals(): Record<string, Meal> {
+  const currentDefaults = getCurrentDefaultWeeklyMeals();
   // 1. Start with all bundled defaults — guaranteed 42 meals
   const result: Record<string, Meal> = {};
-  for (const [id, meal] of Object.entries(DEFAULT_WEEKLY_MEALS)) {
+  for (const [id, meal] of Object.entries(currentDefaults)) {
     result[id] = meal as Meal;
   }
 
@@ -66,15 +68,18 @@ function getCanonicalMeals(): Record<string, Meal> {
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
         for (const [id, value] of Object.entries(parsed as Record<string, unknown>)) {
           if (!isValidMeal(value)) continue;
-          const isDefault = id in DEFAULT_WEEKLY_MEALS;
+          const isDefault = id in currentDefaults;
           if (isDefault) {
             // Default IDs may be customized but must stay on their weekday
-            const canonical = DEFAULT_WEEKLY_MEALS[id];
+            const canonical = currentDefaults[id];
             if (value.day === canonical.day) {
               result[id] = {
                 ...value,
                 id,
                 day: canonical.day,
+                ...(canonical.type === 'dinner'
+                  ? { type: canonical.type, name: canonical.name, foods: [...canonical.foods] }
+                  : {}),
                 reminderEnabled: reminderPreference(value),
               };
             }
@@ -129,6 +134,25 @@ export function useMeals(day: DayOfWeek | string) {
     return () => window.removeEventListener(MEALS_CHANGED, handler);
   }, []);
 
+  // Rotate once when a new Beirut week begins, including if the PWA stays open.
+  useEffect(() => {
+    let activeWeek = getBeirutWeekKey();
+    const refreshWeek = () => {
+      const nextWeek = getBeirutWeekKey();
+      if (nextWeek === activeWeek) return;
+      activeWeek = nextWeek;
+      setAllMeals(getCanonicalMeals());
+    };
+    const interval = window.setInterval(refreshWeek, 60_000);
+    window.addEventListener('focus', refreshWeek);
+    document.addEventListener('visibilitychange', refreshWeek);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refreshWeek);
+      document.removeEventListener('visibilitychange', refreshWeek);
+    };
+  }, []);
+
   // Refresh completion flags when the selected weekday changes
   useEffect(() => {
     setCompletedIdsState(getCompletedIds(todayDateStr()));
@@ -161,7 +185,7 @@ export function useMeals(day: DayOfWeek | string) {
   const deleteMeal = useCallback((id: string) => {
     const all = getCanonicalMeals();
     if (id in DEFAULT_WEEKLY_MEALS) {
-      all[id] = DEFAULT_WEEKLY_MEALS[id] as Meal; // reset to bundled version
+      all[id] = getCurrentDefaultWeeklyMeals()[id] as Meal; // reset to this week's bundled version
     } else {
       delete all[id];
     }

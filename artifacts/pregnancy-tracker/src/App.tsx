@@ -5,6 +5,14 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { Route, Switch, Router as WouterRouter, Link, useLocation } from 'wouter';
 import { Home, Calendar, CheckSquare, BarChart3, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getAllMealsByDay } from '@/hooks/useMeals';
+import { setupAllMealReminders } from '@/push';
+import {
+  DINNER_REMINDER_SYNC_STORAGE_KEY,
+  getCurrentDinnerRotationSignature,
+} from '@/data/dinnerPool';
+import { getFromStorage, SETTINGS_KEY } from '@/lib/storage';
+import type { AppSettings } from '@/types';
 
 // Pages
 import HomePage from '@/pages/home';
@@ -91,12 +99,53 @@ function NotificationMessageBridge() {
   return null;
 }
 
+function WeeklyDinnerReminderSync() {
+  useEffect(() => {
+    let syncing = false;
+    const syncDinners = async () => {
+      if (syncing || typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+      const settings = getFromStorage<Partial<AppSettings> | null>(SETTINGS_KEY, null);
+      if (settings?.notificationsEnabled !== true) return;
+
+      syncing = true;
+      try {
+        const signature = getCurrentDinnerRotationSignature();
+        if (localStorage.getItem(DINNER_REMINDER_SYNC_STORAGE_KEY) === signature) return;
+        const meals = Object.values(getAllMealsByDay()).flat();
+        await setupAllMealReminders(meals);
+        localStorage.setItem(DINNER_REMINDER_SYNC_STORAGE_KEY, signature);
+      } catch (error) {
+        console.error('[Dinner rotation] Failed to sync weekly reminder details:', error);
+      } finally {
+        syncing = false;
+      }
+    };
+
+    const check = () => { void syncDinners(); };
+    const visibilityCheck = () => {
+      if (document.visibilityState === 'visible') check();
+    };
+    check();
+    const interval = window.setInterval(check, 60_000);
+    window.addEventListener('focus', check);
+    document.addEventListener('visibilitychange', visibilityCheck);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', check);
+      document.removeEventListener('visibilitychange', visibilityCheck);
+    };
+  }, []);
+
+  return null;
+}
+
 // ─── Router ───────────────────────────────────────────────────────────────────
 
 function Router() {
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#0D1117]">
       <NotificationMessageBridge />
+      <WeeklyDinnerReminderSync />
       <main
         className="flex-1 overflow-y-auto overflow-x-hidden safe-pt"
         style={{ paddingBottom: 'calc(49px + env(safe-area-inset-bottom, 0px))' }}
