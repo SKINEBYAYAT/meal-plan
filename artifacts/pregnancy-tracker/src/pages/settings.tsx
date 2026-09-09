@@ -8,14 +8,13 @@ import {
   setMasterReminder,
   sendRemoteTestNotification,
 } from '../push';
-import { Bell, User, Heart, Download, Upload, Trash2, ChevronRight, Bug } from 'lucide-react';
+import { Bell, User, Heart, Download, Upload, Trash2, RefreshCw } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
-import { Link } from 'wouter';
 import { MEAL_PLAN_KEY, COMPLETIONS_KEY, MEAL_DELETIONS_KEY, HABITS_KEY, HABIT_LOGS_KEY, STREAKS_KEY, SETTINGS_KEY } from '../lib/storage';
 
 const BEIRUT_DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
@@ -64,16 +63,15 @@ function nextReminderLabel(enabled: boolean, now = new Date()): string {
     }
   }
 
-  return next ? `${next.name} · ${displayMealTime(next.time)}` : 'None scheduled';
+  return next ? `${next.name} • ${displayMealTime(next.time)}` : 'None scheduled';
 }
 
 export default function SettingsPage() {
   const { settings, updateSettings } = useSettings();
   const { permission, requestPermission } = useNotifications();
   const [diagnostics, setDiagnostics] = useState<Awaited<ReturnType<typeof getPushDiagnostic>> | null>(null);
-  const [pushResult, setPushResult] = useState('');
   const [settingUpReminders, setSettingUpReminders] = useState(false);
-  const [setupError, setSetupError] = useState('');
+  const [refreshingStatus, setRefreshingStatus] = useState(false);
   const [name, setName] = useState(settings.userName);
   const syncingReminderDefaults = useRef(false);
   const { toast } = useToast();
@@ -84,8 +82,7 @@ export default function SettingsPage() {
       setDiagnostics(next);
       return next;
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setPushResult(message);
+      console.error('[Settings] Failed to refresh notification status:', error);
       return null;
     }
   }, []);
@@ -106,13 +103,21 @@ export default function SettingsPage() {
         await refreshDiagnostics();
       })
       .catch((error) => {
-        const message = error instanceof Error ? error.message : String(error);
-        setSetupError(message);
+        console.error('[Settings] Failed to sync reminder defaults:', error);
       })
       .finally(() => {
         syncingReminderDefaults.current = false;
       });
   }, [diagnostics?.backendDevice, diagnostics?.masterEnabled, diagnostics?.subscription, refreshDiagnostics]);
+
+  const handleStatusRefresh = useCallback(async () => {
+    setRefreshingStatus(true);
+    try {
+      await refreshDiagnostics();
+    } finally {
+      setRefreshingStatus(false);
+    }
+  }, [refreshDiagnostics]);
 
   const handleNameSave = () => {
     updateSettings({ userName: name });
@@ -165,13 +170,10 @@ export default function SettingsPage() {
   const handleNotificationToggle = async (checked: boolean) => {
     if (settingUpReminders) return;
     setSettingUpReminders(true);
-    setSetupError('');
     try {
       if (checked) {
         const granted = permission === 'granted' || await requestPermission();
         if (!granted) {
-          const denialMessage = 'Notification permission denied';
-          setSetupError(denialMessage);
           toast({
             title: 'Permission denied',
             description:
@@ -204,7 +206,6 @@ export default function SettingsPage() {
     } catch (error) {
       console.error('[Settings] Failed to update meal reminders:', error);
       const message = error instanceof Error ? error.message : 'Notification setup failed. Please try again.';
-      setSetupError(message);
       toast({
         title: 'Could not enable reminders',
         description: message,
@@ -223,19 +224,15 @@ export default function SettingsPage() {
       if (!subscription) throw new Error('Notification permission denied');
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      setPushResult(message);
       toast({ title: 'Test notification failed', description: message, variant: 'destructive' });
       return;
     }
     try {
-      const result = await sendRemoteTestNotification();
-      const detail = JSON.stringify(result);
-      setPushResult(detail);
-      toast({ title: 'Test notification sent', description: detail });
+      await sendRemoteTestNotification();
+      toast({ title: 'Test notification sent', description: 'Notification sent successfully.' });
     } catch (err) {
       console.error('[Settings] Failed to send test notification:', err);
       const message = err instanceof Error ? err.message : String(err);
-      setPushResult(message);
       toast({ title: 'Test notification failed', description: message, variant: 'destructive' });
     }
     await refreshDiagnostics();
@@ -245,7 +242,17 @@ export default function SettingsPage() {
   return (
     <div className="flex flex-col h-full">
       <div className="sticky top-0 z-10 bg-[#0D1117]/95 backdrop-blur-sm border-b border-[#2d3748] px-4 pt-6 pb-4">
-        <h1 className="text-2xl font-bold mb-1">Settings</h1>
+        <div className="flex items-center justify-between gap-4">
+          <h1 className="text-2xl font-bold">Settings</h1>
+          <Button
+            onClick={() => void handleStatusRefresh()}
+            disabled={refreshingStatus}
+            className="h-9 px-3 bg-[#2d3748] text-white hover:bg-[#3a4658] disabled:opacity-60"
+          >
+            <RefreshCw className={cn('w-4 h-4 mr-2', refreshingStatus && 'animate-spin')} />
+            {refreshingStatus ? 'Refreshing...' : 'Refresh'}
+          </Button>
+        </div>
       </div>
 
       <div className="p-4 space-y-8 flex-1">
@@ -296,29 +303,11 @@ export default function SettingsPage() {
               />
             </div>
             {settingUpReminders && <div className="px-4 pb-3 text-xs text-blue-300">Setting up...</div>}
-            {setupError && !settingUpReminders && <div className="px-4 pb-3 text-xs text-red-400 break-words">Last setup error: {setupError}</div>}
-
-            <div className="p-4 grid grid-cols-2 gap-x-4 gap-y-2 text-xs text-gray-400">
-              <span>PWA Installed</span><strong className="text-right text-gray-200">{diagnostics?.pwaInstalled ? 'Yes' : 'No'}</strong>
-              <span>Notifications Supported</span><strong className="text-right text-gray-200">{diagnostics?.supported ? 'Yes' : 'No'}</strong>
-              <span>Permission</span><strong className="text-right text-gray-200">{diagnostics?.permission ?? permission}</strong>
-              <span>Service Worker</span><strong className="text-right text-gray-200">{diagnostics?.serviceWorker ?? 'inactive'}</strong>
-              <span>Push Subscription</span><strong className="text-right text-gray-200">{diagnostics?.subscription ?? 'missing'}</strong>
-              <span>Backend Device Record</span><strong className="text-right text-gray-200">{diagnostics?.backendDevice ?? 'missing'}</strong>
-              <span>Master Meal Reminders</span><strong className="text-right text-gray-200">{diagnostics?.masterEnabled ? 'on' : 'off'}</strong>
-              <span>Next reminder</span><strong className="text-right text-gray-200">{nextReminderLabel(Boolean(diagnostics?.masterEnabled))}</strong>
-              <span>SW Registrations</span><strong className="text-right text-gray-200">{diagnostics?.registrationCount ?? 0}</strong>
-              <span>SW Script URL</span><strong className="text-right text-gray-200 break-all">{diagnostics?.scriptUrl ?? 'none'}</strong>
-              <span>SW Scope</span><strong className="text-right text-gray-200 break-all">{diagnostics?.scope ?? 'none'}</strong>
-              <span>Installing State</span><strong className="text-right text-gray-200">{diagnostics?.installingState ?? 'none'}</strong>
-              <span>Waiting State</span><strong className="text-right text-gray-200">{diagnostics?.waitingState ?? 'none'}</strong>
-              <span>Active State</span><strong className="text-right text-gray-200">{diagnostics?.activeState ?? 'none'}</strong>
-              <span>Controller Present</span><strong className="text-right text-gray-200">{diagnostics?.controllerPresent ? 'Yes' : 'No'}</strong>
-              <span>PushManager Available</span><strong className="text-right text-gray-200">{diagnostics?.pushManagerAvailable ? 'Yes' : 'No'}</strong>
-              <span>VAPID Public Key Loaded</span><strong className="text-right text-gray-200">{diagnostics?.vapidPublicKeyLoaded ? 'Yes' : 'No'}</strong>
-              <span>Subscription POST</span><strong className="text-right text-gray-200 break-words">{diagnostics?.subscriptionPostStatus ?? 'not attempted'}</strong>
-              <span>Backend Lookup</span><strong className="text-right text-gray-200 break-words">{diagnostics?.backendLookupStatus ?? 'not attempted'}</strong>
-              <span>Last Setup Error</span><strong className="text-right text-gray-200 break-words">{setupError || diagnostics?.lastSetupError || 'none'}</strong>
+            <div className="flex items-center justify-between p-4">
+              <span className="text-sm text-gray-400">Next reminder</span>
+              <strong className="text-sm text-right text-gray-200">
+                {nextReminderLabel(Boolean(diagnostics?.masterEnabled))}
+              </strong>
             </div>
 
             <div className="flex items-center justify-between p-4">
@@ -330,9 +319,8 @@ export default function SettingsPage() {
                 Test
               </Button>
             </div>
-            {pushResult && <div className="px-4 pb-3 text-xs text-gray-300 break-words">Backend result: {pushResult}</div>}
 
-            {permission === 'denied' && (
+            {(diagnostics?.permission ?? permission) === 'denied' && (
               <div className="px-4 py-3 bg-amber-500/5">
                 <p className="text-xs text-amber-400 leading-relaxed">
                   Notifications are blocked. On iPhone: <strong>Settings → Safari → Notifications</strong> → enable for this site.
@@ -352,19 +340,6 @@ export default function SettingsPage() {
               />
             </div>
 
-            {/* Link to debug page */}
-            <Link href="/notifications-debug">
-              <div className="flex items-center gap-3 p-4 hover:bg-[#2d3748]/50 transition-colors cursor-pointer">
-                <div className="w-8 h-8 rounded-full bg-[#0D1117] flex items-center justify-center">
-                  <Bug className="w-4 h-4 text-gray-400" />
-                </div>
-                <div className="flex-1">
-                  <div className="font-medium text-sm">Notification Debug</div>
-                  <div className="text-xs text-gray-400">Development tools</div>
-                </div>
-                <ChevronRight className="w-4 h-4 text-gray-500" />
-              </div>
-            </Link>
           </div>
         </section>
 
