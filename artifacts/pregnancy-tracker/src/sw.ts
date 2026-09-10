@@ -48,6 +48,8 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   // Only handle same-origin requests; let the browser handle everything else
   if (!event.request.url.startsWith(self.location.origin)) return;
+  // Configuration and device status must always come from the backend.
+  if (new URL(event.request.url).pathname.startsWith('/api/')) return;
 
   event.respondWith(
     fetch(event.request)

@@ -73,6 +73,9 @@ export default function SettingsPage() {
   const [diagnostics, setDiagnostics] = useState<Awaited<ReturnType<typeof getPushDiagnostic>> | null>(null);
   const [settingUpReminders, setSettingUpReminders] = useState(false);
   const [refreshingStatus, setRefreshingStatus] = useState(false);
+  const [statusError, setStatusError] = useState('');
+  const [testResult, setTestResult] = useState('');
+  const [testingPush, setTestingPush] = useState(false);
   const [name, setName] = useState(settings.userName);
   const syncingReminderDefaults = useRef(false);
   const { toast } = useToast();
@@ -81,9 +84,12 @@ export default function SettingsPage() {
     try {
       const next = await getPushDiagnostic();
       setDiagnostics(next);
+      setStatusError(next.lastSetupError);
       return next;
     } catch (error) {
       console.error('[Settings] Failed to refresh notification status:', error);
+      setDiagnostics(null);
+      setStatusError(error instanceof Error ? error.message : String(error));
       return null;
     }
   }, []);
@@ -220,23 +226,30 @@ export default function SettingsPage() {
   };
 
   const handleTestNotification = useCallback(async () => {
+    setTestingPush(true);
+    setTestResult('Sending...');
     try {
       const subscription = await requestPushSubscription();
       if (!subscription) throw new Error('Notification permission denied');
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       toast({ title: 'Test notification failed', description: message, variant: 'destructive' });
+      setTestResult(message);
+      setTestingPush(false);
       return;
     }
     try {
-      await sendRemoteTestNotification();
-      toast({ title: 'Test notification sent', description: 'Notification sent successfully.' });
+      const result = await sendRemoteTestNotification();
+      setTestResult(JSON.stringify(result, null, 2));
+      toast({ title: 'Test push accepted', description: `Web Push HTTP ${result.statusCode}. Check this device for the notification.` });
     } catch (err) {
       console.error('[Settings] Failed to send test notification:', err);
       const message = err instanceof Error ? err.message : String(err);
       toast({ title: 'Test notification failed', description: message, variant: 'destructive' });
+      setTestResult(message);
     }
     await refreshDiagnostics();
+    setTestingPush(false);
   }, [refreshDiagnostics, toast]);
 
 
@@ -316,15 +329,28 @@ export default function SettingsPage() {
                 <div className="font-medium">Send Test Notification</div>
                 <div className="text-sm text-gray-400 mt-0.5">Verify server push delivery</div>
               </div>
-              <Button onClick={() => void handleTestNotification()} className="h-9 px-4 text-sm bg-[#2d3748] text-white hover:bg-[#4CAF50]">
+              <Button disabled={testingPush || settingUpReminders} onClick={() => void handleTestNotification()} className="h-9 px-4 text-sm bg-[#2d3748] text-white hover:bg-[#4CAF50]">
                 Test
               </Button>
+            </div>
+
+            <div className="p-4 space-y-2 text-xs" aria-live="polite">
+              <div>PWA Installed: {diagnostics ? (diagnostics.pwaInstalled ? 'Yes' : 'No') : 'Unknown'}</div>
+              <div>Notifications Supported: {diagnostics ? (diagnostics.supported ? 'Yes' : 'No') : 'Unknown'}</div>
+              <div>Permission: {diagnostics?.permission ?? 'Unknown'}</div>
+              <div>Service Worker: {diagnostics?.serviceWorker ?? 'Unknown'}</div>
+              <div>Push Subscription: {diagnostics?.subscription ?? 'Unknown'}</div>
+              <div>Backend Device Record: {diagnostics?.backendDevice ?? 'Unknown'}</div>
+              <div>Master Meal Reminders: {diagnostics ? (diagnostics.masterEnabled ? 'on' : 'off') : 'Unknown'}</div>
+              <div>Enabled meals: {diagnostics?.enabledReminderCount ?? 'Unknown'}</div>
+              {statusError && <p className="text-amber-400 break-words">{statusError}</p>}
+              {testResult && <pre className="whitespace-pre-wrap break-words">{testResult}</pre>}
             </div>
 
             {(diagnostics?.permission ?? permission) === 'denied' && (
               <div className="px-4 py-3 bg-amber-500/5">
                 <p className="text-xs text-amber-400 leading-relaxed">
-                  Notifications are blocked. On iPhone: <strong>Settings → Safari → Notifications</strong> → enable for this site.
+                  Notifications are blocked. Open iPhone Settings, find this installed app under Notifications, and allow notifications.
                 </p>
               </div>
             )}

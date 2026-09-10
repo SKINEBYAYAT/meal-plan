@@ -225,7 +225,8 @@ export async function processDueReminders(): Promise<number> {
   for (const reminder of rows) {
     if (!due(reminder, current.time) || (reminder.last_sent_date === current.date && reminder.last_sent_time === reminder.time)) continue;
     const claim = await pool.query(`UPDATE meal_reminders SET last_sent_date = $1, last_sent_time = $2
-      WHERE id = $3 AND NOT (last_sent_date = $1 AND last_sent_time = $2) RETURNING id`, [current.date, reminder.time, reminder.id]);
+      WHERE id = $3 AND (last_sent_date IS DISTINCT FROM $1 OR last_sent_time IS DISTINCT FROM $2)
+      RETURNING id`, [current.date, reminder.time, reminder.id]);
     if (!claim.rowCount) continue;
     const body = ["Today's meal:", ...parseFoods(reminder.foods).map((food) => `• ${food}`)].join('\n');
     try {

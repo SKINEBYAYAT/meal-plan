@@ -58,7 +58,8 @@ export function isStandalonePwa(): boolean {
 }
 
 function isIos(): boolean {
-  return /iPad|iPhone|iPod/.test(navigator.userAgent);
+  return /iPad|iPhone|iPod/.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 }
 
 function decodeKey(value: string): ArrayBuffer {
@@ -165,8 +166,8 @@ async function sync(payload: Record<string, unknown>): Promise<Record<string, un
 
 export async function requestPushSubscription(): Promise<PushSubscriptionJSON | null> {
   try {
-    if (!('Notification' in window)) throw new Error('Notifications are not supported by this browser.');
     if (isIos() && !isStandalonePwa()) throw new Error('Install this app to your Home Screen first to enable notifications.');
+    if (!('Notification' in window)) throw new Error('Notifications are not supported by this browser.');
     if (Notification.permission !== 'granted' && await Notification.requestPermission() !== 'granted') return null;
     const result = subscriptionJson(await getSubscription());
     lastSetupError = '';
@@ -195,7 +196,11 @@ export async function removeMealReminder(mealId: string): Promise<void> {
 
 export async function setMasterReminder(enabled: boolean): Promise<void> {
   try {
-    const subscription = subscriptionJson(await getSubscription());
+    const current = enabled
+      ? await getSubscription()
+      : await (await navigator.serviceWorker.getRegistration())?.pushManager.getSubscription();
+    if (!current) throw new Error('Push subscription missing; cannot update this device.');
+    const subscription = subscriptionJson(current);
     await sync({ action: 'master', deviceId: deviceId(), subscription, enabled });
     lastSetupError = '';
   } catch (error) {
@@ -266,9 +271,16 @@ export async function getPushDiagnostic(): Promise<PushDiagnostic> {
   if (!current) return base;
   base.subscription = 'registered';
   const subscription = subscriptionJson(current);
-  const result = await sync({ action: 'status', deviceId: deviceId(), subscription }) as {
+  let result: {
     registered?: boolean; masterEnabled?: boolean; reminderCount?: number; enabledReminderCount?: number;
   };
+  try {
+    result = await sync({ action: 'status', deviceId: deviceId(), subscription });
+  } catch (error) {
+    base.lastSetupError = rememberError(error);
+    base.backendLookupStatus = backendLookupStatus;
+    return base;
+  }
   base.backendDevice = result.registered ? 'registered' : 'missing';
   base.masterEnabled = result.masterEnabled === true;
   base.reminderCount = result.reminderCount ?? 0;
