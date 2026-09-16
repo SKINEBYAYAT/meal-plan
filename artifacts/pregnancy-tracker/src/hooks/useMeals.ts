@@ -12,6 +12,7 @@ import { getBeirutWeekKey } from '../data/dinnerPool';
 // ─── Cross-component reactivity ───────────────────────────────────────────────
 
 const MEALS_CHANGED = 'meals-store-changed';
+const MEAL_PLAN_WEEK_KEY = `${MEAL_PLAN_KEY}-week`;
 
 const VALID_DAYS = new Set<string>([
   'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
@@ -53,6 +54,8 @@ function reminderPreference(value: Meal): boolean {
 // default day always shows its 6 meals. No seed system, no migrations needed.
 
 function getCanonicalMeals(): Record<string, Meal> {
+  const currentWeekKey = getBeirutWeekKey();
+  const isNewWeek = getFromStorage<string>(MEAL_PLAN_WEEK_KEY, '') !== currentWeekKey;
   const currentDefaults = getCurrentDefaultWeeklyMeals();
   // 1. Start with all bundled defaults — guaranteed 42 meals
   const result: Record<string, Meal> = {};
@@ -77,7 +80,7 @@ function getCanonicalMeals(): Record<string, Meal> {
                 ...value,
                 id,
                 day: canonical.day,
-                ...(canonical.type === 'dinner'
+                ...(isNewWeek || canonical.type === 'dinner'
                   ? { type: canonical.type, name: canonical.name, foods: [...canonical.foods] }
                   : {}),
                 reminderEnabled: reminderPreference(value),
@@ -93,14 +96,28 @@ function getCanonicalMeals(): Record<string, Meal> {
     // corrupt JSON — defaults only
   }
 
+  // Persist the current generated plan before marking its week as current.
+  // Do not dispatch here: readers (including reminder sync) also call this function.
+  if (isNewWeek) {
+    try {
+      localStorage.setItem(MEAL_PLAN_KEY, JSON.stringify(result));
+      localStorage.setItem(MEAL_PLAN_WEEK_KEY, JSON.stringify(currentWeekKey));
+    } catch (error) {
+      console.error('[Meal rotation] Failed to save weekly plan:', error);
+    }
+  }
+
   return result;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function todayDateStr(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Beirut', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
 }
 
 function getCompletedIds(date: string): Set<string> {
@@ -137,7 +154,13 @@ export function useMeals(day: DayOfWeek | string) {
   // Rotate once when a new Beirut week begins, including if the PWA stays open.
   useEffect(() => {
     let activeWeek = getBeirutWeekKey();
+    let activeDate = todayDateStr();
     const refreshWeek = () => {
+      const nextDate = todayDateStr();
+      if (nextDate !== activeDate) {
+        activeDate = nextDate;
+        setCompletedIdsState(getCompletedIds(nextDate));
+      }
       const nextWeek = getBeirutWeekKey();
       if (nextWeek === activeWeek) return;
       activeWeek = nextWeek;
