@@ -179,3 +179,91 @@ assert.equal(new Set(seen.slice(0, 50)).size, 50);
 assert.equal(app.pool.getBeirutWeekKey(new Date('2026-01-04T22:00:00Z')), '2026-01-05');
 assert.equal(app.pool.getBeirutWeekKey(new Date('2026-10-25T22:00:00Z')), '2026-10-26');
 console.log('PASS: Pool exhaustion avoids unnecessary repeats; winter and DST week keys are correct.');
+
+// Simulate an existing install whose current-week state predates the recovery.
+now = '2026-09-17T09:00:00Z';
+storage.clear();
+for (const [key, value] of mondayStorage) storage.set(key, value);
+const rotationKey = app.pool.DINNER_ROTATION_STORAGE_KEY;
+const staleRotation = read(rotationKey);
+delete staleRotation.recoveredStaleWeek;
+storage.set(rotationKey, JSON.stringify(staleRotation));
+const stalePlan = read(planKey);
+const visibleDinner = app.pool.DINNER_POOL.find(meal => meal.id === staleRotation.remainingDinnerIds[0]);
+stalePlan['monday-dinner'].name = visibleDinner.name;
+stalePlan['monday-dinner'].foods = [...visibleDinner.foods];
+stalePlan['my-custom-meal'] = {
+  id: 'my-custom-meal', day: 'monday', type: 'custom', name: 'My custom meal',
+  foods: ['My food'], time: '18:25', reminderEnabled: false, notes: 'Keep me',
+};
+storage.set(planKey, JSON.stringify(stalePlan));
+storage.set(completionKey, JSON.stringify({ '2026-09-17': ['thursday-dinner', 'my-custom-meal'] }));
+const completionBeforeRecovery = storage.get(completionKey);
+const staleSnapshot = new Map(storage);
+const usedWeekOne = new Set([...staleRotation.currentDinnerIds, visibleDinner.id]);
+
+app = openApp();
+// Reminder sync may read the signature before the hook reads the saved plan.
+const recoveredSignature = app.pool.getCurrentDinnerRotationSignature();
+const recovered = plain(app.api.getAllMealsByDay());
+const recoveredRotation = read(rotationKey);
+assert.equal(recoveredRotation.weekKey, '2026-09-14');
+assert.equal(recoveredRotation.recoveredStaleWeek, '2026-09-14');
+assert.notEqual(recoveredSignature, `2026-09-14:${staleRotation.currentDinnerIds.join(',')}`);
+assert.ok(recoveredRotation.currentDinnerIds.every(id => !usedWeekOne.has(id)));
+assert.deepEqual(recoveredRotation.remainingDinnerIds,
+  staleRotation.remainingDinnerIds.filter(id => !usedWeekOne.has(id)).slice(7));
+assert.deepEqual(read(planKey)['my-custom-meal'], stalePlan['my-custom-meal']);
+for (const meal of Object.values(recovered).flat()) {
+  assert.deepEqual(read(planKey)[meal.id], meal);
+  assert.equal(meal.time, stalePlan[meal.id].time);
+  assert.equal(meal.reminderEnabled, stalePlan[meal.id].reminderEnabled);
+}
+assert.equal(storage.get(completionKey), completionBeforeRecovery);
+assert.equal(storage.get(preferenceKey), preferencesBefore);
+assert.equal(storage.get('pregnancy_tracker_settings'), settingsBefore);
+assert.ok(app.render('thursday').dayPlan.meals.find(meal => meal.id === 'thursday-dinner').completed);
+app.close();
+const afterRecovery = new Map(storage);
+for (let reload = 0; reload < 5; reload++) {
+  app = openApp();
+  assert.deepEqual(plain(app.api.getAllMealsByDay()), recovered);
+  assert.equal(app.pool.getCurrentDinnerRotationSignature(), recoveredSignature);
+  assert.deepEqual(storage, afterRecovery);
+  app.close();
+}
+console.log('PASS: Current-week recovery runs once, saves fresh content, preserves settings/custom meals/completions, and survives reloads.');
+
+now = '2026-09-20T21:00:00Z';
+app = openApp();
+app.api.getAllMealsByDay();
+const followingRotation = read(rotationKey);
+assert.equal(followingRotation.weekKey, '2026-09-21');
+assert.equal(followingRotation.recoveredStaleWeek, '2026-09-14');
+assert.deepEqual(followingRotation.currentDinnerIds, recoveredRotation.remainingDinnerIds.slice(0, 7));
+assert.ok(followingRotation.currentDinnerIds.every(id => !usedWeekOne.has(id)
+  && !recoveredRotation.currentDinnerIds.includes(id)));
+app.close();
+console.log('PASS: Next Monday continues from the remaining queue without resetting history.');
+
+// A client first receiving this code after the target week must not reset midweek.
+storage.clear();
+for (const [key, value] of staleSnapshot) storage.set(key, value);
+storage.set(rotationKey, JSON.stringify({ ...staleRotation, weekKey: '2026-09-21' }));
+now = '2026-09-23T09:00:00Z';
+app = openApp();
+app.pool.getCurrentWeeklyDinners();
+assert.deepEqual(read(rotationKey).currentDinnerIds, staleRotation.currentDinnerIds);
+assert.equal(read(rotationKey).recoveredStaleWeek, undefined);
+app.close();
+
+// New installs get one initial selection, not another rotation on their next open.
+storage.clear();
+now = '2026-09-17T09:00:00Z';
+app = openApp();
+const firstInstall = plain(app.api.getAllMealsByDay());
+app.close();
+app = openApp();
+assert.deepEqual(plain(app.api.getAllMealsByDay()), firstInstall);
+app.close();
+console.log('PASS: Recovery is restricted to September 14 week; new installs also remain stable.');

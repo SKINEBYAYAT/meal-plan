@@ -1,4 +1,5 @@
 import type { DayOfWeek } from '../types';
+import { MEAL_PLAN_KEY } from '../lib/storage';
 
 export type DinnerOption = Readonly<{
   id: string;
@@ -10,6 +11,8 @@ export const DINNER_ROTATION_STORAGE_KEY = 'pregnancy-dinner-rotation-v1';
 export const DINNER_REMINDER_SYNC_STORAGE_KEY = 'pregnancy-dinner-reminder-sync-v1';
 
 const POOL_VERSION = 1;
+// One-time recovery for the stale week; never force a reset in later weeks.
+const STALE_WEEK_RECOVERY = '2026-09-14';
 const DINNER_DAYS: readonly DayOfWeek[] = [
   'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
 ];
@@ -72,6 +75,7 @@ type DinnerRotationState = {
   weekKey: string;
   currentDinnerIds: string[];
   remainingDinnerIds: string[];
+  recoveredStaleWeek?: string;
 };
 
 const dinnerById = new Map(DINNER_POOL.map((dinner) => [dinner.id, dinner]));
@@ -118,6 +122,8 @@ function readRotationState(): DinnerRotationState | null {
       weekKey: parsed.weekKey,
       currentDinnerIds,
       remainingDinnerIds: validUniqueIds(parsed.remainingDinnerIds),
+      recoveredStaleWeek: parsed.recoveredStaleWeek === STALE_WEEK_RECOVERY
+        ? STALE_WEEK_RECOVERY : undefined,
     };
     return memoryRotationState;
   } catch {
@@ -167,15 +173,40 @@ function drawWeek(queue: string[], previousWeekIds: readonly string[] = []): { s
 function getDinnerIdsForWeek(now = new Date()): { weekKey: string; dinnerIds: string[] } {
   const weekKey = getBeirutWeekKey(now);
   const saved = readRotationState();
-  if (saved?.weekKey === weekKey) return { weekKey, dinnerIds: saved.currentDinnerIds };
+  const recoverStaleWeek = weekKey === STALE_WEEK_RECOVERY
+    && saved?.recoveredStaleWeek !== STALE_WEEK_RECOVERY;
+  if (saved?.weekKey === weekKey && !recoverStaleWeek) {
+    return { weekKey, dinnerIds: saved.currentDinnerIds };
+  }
 
   const allIds = DINNER_POOL.map((dinner) => dinner.id);
-  const drawn = drawWeek(saved?.remainingDinnerIds ?? shuffle(allIds), saved?.currentDinnerIds);
+  const previousIds = new Set(saved?.currentDinnerIds ?? []);
+  if (recoverStaleWeek) {
+    // The visible snapshot may predate the rotation state. Count both as used,
+    // while ignoring custom meals and retaining the existing unconsumed queue.
+    try {
+      const plan = JSON.parse(localStorage.getItem(MEAL_PLAN_KEY) ?? '{}');
+      for (const day of DINNER_DAYS) {
+        const visible = plan?.[`${day}-dinner`];
+        const dinner = DINNER_POOL.find((option) => option.name === visible?.name);
+        if (dinner) previousIds.add(dinner.id);
+      }
+    } catch {
+      // The saved rotation still supplies the previously used dinner IDs.
+    }
+  }
+  const queue = saved?.remainingDinnerIds ?? shuffle(allIds);
+  const drawn = drawWeek(
+    recoverStaleWeek ? queue.filter((id) => !previousIds.has(id)) : queue,
+    [...previousIds],
+  );
   writeRotationState({
     version: POOL_VERSION,
     weekKey,
     currentDinnerIds: drawn.selected,
     remainingDinnerIds: drawn.remaining,
+    // Store the marker and selection atomically, including on a first install.
+    recoveredStaleWeek: recoverStaleWeek ? STALE_WEEK_RECOVERY : saved?.recoveredStaleWeek,
   });
   return { weekKey, dinnerIds: drawn.selected };
 }

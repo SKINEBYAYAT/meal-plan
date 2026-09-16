@@ -56,6 +56,7 @@ function reminderPreference(value: Meal): boolean {
 function getCanonicalMeals(): Record<string, Meal> {
   const currentWeekKey = getBeirutWeekKey();
   const isNewWeek = getFromStorage<string>(MEAL_PLAN_WEEK_KEY, '') !== currentWeekKey;
+  let needsPlanSave = isNewWeek;
   const currentDefaults = getCurrentDefaultWeeklyMeals();
   // 1. Start with all bundled defaults — guaranteed 42 meals
   const result: Record<string, Meal> = {};
@@ -76,6 +77,10 @@ function getCanonicalMeals(): Record<string, Meal> {
             // Default IDs may be customized but must stay on their weekday
             const canonical = currentDefaults[id];
             if (value.day === canonical.day) {
+              if (canonical.type === 'dinner' && (value.name !== canonical.name
+                || JSON.stringify(value.foods) !== JSON.stringify(canonical.foods))) {
+                needsPlanSave = true;
+              }
               result[id] = {
                 ...value,
                 id,
@@ -98,7 +103,7 @@ function getCanonicalMeals(): Record<string, Meal> {
 
   // Persist the current generated plan before marking its week as current.
   // Do not dispatch here: readers (including reminder sync) also call this function.
-  if (isNewWeek) {
+  if (needsPlanSave) {
     try {
       localStorage.setItem(MEAL_PLAN_KEY, JSON.stringify(result));
       localStorage.setItem(MEAL_PLAN_WEEK_KEY, JSON.stringify(currentWeekKey));
