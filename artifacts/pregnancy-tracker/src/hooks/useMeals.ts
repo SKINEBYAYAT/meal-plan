@@ -81,7 +81,7 @@ function getCanonicalMeals(): Record<string, Meal> {
               // Refresh generated content when the Beirut week changes. Dinners
               // also stay authoritative within the week so rotation content
               // cannot be overwritten by an older local snapshot.
-              const refreshGeneratedContent = isNewWeek || canonical.type === 'dinner';
+              const refreshGeneratedContent = isNewWeek || canonical.type === 'lunch' || canonical.type === 'dinner';
               if (refreshGeneratedContent && (value.name !== canonical.name
                 || JSON.stringify(value.foods) !== JSON.stringify(canonical.foods))) {
                 needsPlanSave = true;
