@@ -77,7 +77,12 @@ function getCanonicalMeals(): Record<string, Meal> {
             // Default IDs may be customized but must stay on their weekday
             const canonical = currentDefaults[id];
             if (value.day === canonical.day) {
-              if (canonical.type === 'dinner' && (value.name !== canonical.name
+              // Every built-in meal is generated as one balanced weekly plan.
+              // Refresh generated content when the Beirut week changes. Dinners
+              // also stay authoritative within the week so rotation content
+              // cannot be overwritten by an older local snapshot.
+              const refreshGeneratedContent = isNewWeek || canonical.type === 'dinner';
+              if (refreshGeneratedContent && (value.name !== canonical.name
                 || JSON.stringify(value.foods) !== JSON.stringify(canonical.foods))) {
                 needsPlanSave = true;
               }
@@ -85,7 +90,7 @@ function getCanonicalMeals(): Record<string, Meal> {
                 ...value,
                 id,
                 day: canonical.day,
-                ...(isNewWeek || canonical.type === 'dinner'
+                ...(refreshGeneratedContent
                   ? { type: canonical.type, name: canonical.name, foods: [...canonical.foods] }
                   : {}),
                 reminderEnabled: reminderPreference(value),
