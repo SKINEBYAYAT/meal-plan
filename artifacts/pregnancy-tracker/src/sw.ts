@@ -9,7 +9,7 @@ declare const self: ServiceWorkerGlobalScope & { __WB_MANIFEST: any[] };
 
 // IMPORTANT: bump this version whenever cached content must be force-refreshed.
 // The activate handler deletes all caches that don't match this name.
-const CACHE_NAME = 'pnt-v4';
+const CACHE_NAME = 'pnt-v5';
 
 // ─── Precache ────────────────────────────────────────────────────────────────
 
