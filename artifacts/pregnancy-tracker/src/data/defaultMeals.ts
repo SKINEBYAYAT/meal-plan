@@ -101,6 +101,52 @@ const weeklyFoods: Record<DayOfWeek, Record<BuiltInMealType, string[]>> = {
   },
 };
 
+
+type SupportingMeals = Pick<Record<BuiltInMealType, string[]>, 'breakfast' | 'morning_snack' | 'lunch' | 'afternoon_snack' | 'night_snack'>;
+
+function balancedSupportingMeals(day: DayOfWeek, dinner: ReturnType<typeof getCurrentWeeklyDinners>[DayOfWeek]): SupportingMeals {
+  const base = weeklyFoods[day];
+  const profile = dinner.nutrition;
+
+  // Keep six eating occasions and adjust the rest of the day around dinner.
+  // This is food-planning logic, not a calorie prescription.
+  const breakfast = profile.heaviness === 'heavy'
+    ? ['2 fully cooked eggs', 'Whole-wheat pita', 'Well-washed cucumber and tomato', 'Seasonal fruit']
+    : ['2 fully cooked eggs', 'Pasteurized labneh', 'Whole-wheat pita', 'Well-washed cucumber and tomato'];
+
+  const morning_snack = profile.heaviness === 'heavy'
+    ? ['Seasonal fruit', 'Handful of unsalted nuts']
+    : ['3-4 rutab', 'Handful of walnuts or almonds'];
+
+  let lunch: string[];
+  if (profile.protein === 'plant') {
+    lunch = ['Fully cooked chicken', 'Rice or bulgur', 'Cooked vegetables', 'Lemon'];
+  } else if (!profile.ironRich) {
+    lunch = ['Fully cooked lean beef', 'Rice or potato', 'Well-washed salad with lemon'];
+  } else if (profile.heaviness === 'heavy') {
+    lunch = ['Lentil and vegetable soup', 'Whole-wheat pita', 'Well-washed salad with lemon'];
+  } else {
+    lunch = ['Fully cooked chicken', 'Rice or bulgur', 'Cooked vegetables', 'Pasteurized yogurt'];
+  }
+
+  const afternoon_snack = profile.heaviness === 'heavy'
+    ? ['Seasonal fruit', 'Pasteurized yogurt']
+    : ['Banana or seasonal fruit', 'Full-fat pasteurized yogurt'];
+
+  // If dinner lacks vegetables, deliberately add produce earlier in the day.
+  if (!profile.hasVegetables) {
+    lunch = [...lunch, 'Extra cooked or well-washed vegetables'];
+  }
+
+  // Keep the late snack lighter after heavy dinners; otherwise include dairy + fruit
+  // to support energy/protein intake across the day.
+  const night_snack = profile.heaviness === 'heavy'
+    ? ['Pasteurized milk or yogurt', 'Seasonal fruit']
+    : ['Pasteurized milk', 'Banana or seasonal fruit'];
+
+  return { breakfast, morning_snack, lunch, afternoon_snack, night_snack };
+}
+
 const DAYS: DayOfWeek[] = [
   'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
 ];
@@ -124,9 +170,16 @@ export function getCurrentDefaultWeeklyMeals(): Record<string, DefaultMeal> {
   );
   const weeklyDinners = getCurrentWeeklyDinners();
   for (const day of DAYS) {
-    const id = `${day}-dinner`;
     const dinner = weeklyDinners[day];
-    result[id] = { ...result[id], name: dinner.name, foods: [...dinner.foods] };
+    const supporting = balancedSupportingMeals(day, dinner);
+
+    for (const type of ['breakfast', 'morning_snack', 'lunch', 'afternoon_snack', 'night_snack'] as const) {
+      const id = `${day}-${type.replace('_', '-')}`;
+      result[id] = { ...result[id], foods: [...supporting[type]] };
+    }
+
+    const dinnerId = `${day}-dinner`;
+    result[dinnerId] = { ...result[dinnerId], name: dinner.name, foods: [...dinner.foods] };
   }
   return result;
 }
