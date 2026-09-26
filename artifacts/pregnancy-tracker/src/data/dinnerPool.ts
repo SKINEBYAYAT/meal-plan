@@ -22,7 +22,8 @@ type DinnerSeed = Omit<DinnerOption, 'nutrition'>;
 export const DINNER_ROTATION_STORAGE_KEY = 'pregnancy-dinner-rotation-v1';
 export const DINNER_REMINDER_SYNC_STORAGE_KEY = 'pregnancy-dinner-reminder-sync-v1';
 
-const POOL_VERSION = 3;
+const POOL_VERSION = 4;
+const FRESH_START_VERSION = 4;
 // One-time recovery for the stale week; never force a reset in later weeks.
 const STALE_WEEK_RECOVERY = '2026-09-14';
 const DINNER_DAYS: readonly DayOfWeek[] = [
@@ -312,7 +313,25 @@ function drawWeek(queue: string[], previousWeekIds: readonly string[] = []): { s
 
 function getDinnerIdsForWeek(now = new Date()): { weekKey: string; dinnerIds: string[] } {
   const weekKey = getBeirutWeekKey(now);
-  const saved = readRotationState();
+  let saved = readRotationState();
+
+  // v4 is an intentional fresh start for the new 100-meal system. Older saved
+  // rotations are discarded once so users who were stuck on months-old meals
+  // immediately receive a newly generated current week. After this, the same
+  // Beirut week remains stable and every new Monday rotates normally.
+  try {
+    const freshStartKey = `${DINNER_ROTATION_STORAGE_KEY}-fresh-start`;
+    if (localStorage.getItem(freshStartKey) !== String(FRESH_START_VERSION)) {
+      localStorage.removeItem(DINNER_ROTATION_STORAGE_KEY);
+      localStorage.removeItem(MEAL_PLAN_KEY);
+      memoryRotationState = null;
+      saved = null;
+      localStorage.setItem(freshStartKey, String(FRESH_START_VERSION));
+    }
+  } catch {
+    // Storage restrictions should not prevent generating the current week.
+  }
+
   const recoverStaleWeek = weekKey === STALE_WEEK_RECOVERY
     && saved?.recoveredStaleWeek !== STALE_WEEK_RECOVERY;
   if (saved?.weekKey === weekKey && !recoverStaleWeek) {
