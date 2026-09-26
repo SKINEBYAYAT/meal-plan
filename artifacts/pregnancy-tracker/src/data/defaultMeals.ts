@@ -104,9 +104,8 @@ const weeklyFoods: Record<DayOfWeek, Record<BuiltInMealType, string[]>> = {
 
 type SupportingMeals = Pick<Record<BuiltInMealType, string[]>, 'breakfast' | 'morning_snack' | 'lunch' | 'afternoon_snack' | 'night_snack'>;
 
-function balancedSupportingMeals(day: DayOfWeek, dinner: ReturnType<typeof getCurrentWeeklyDinners>[DayOfWeek]): SupportingMeals {
-  const base = weeklyFoods[day];
-  const profile = dinner.nutrition;
+function balancedSupportingMeals(day: DayOfWeek, mainMeal: ReturnType<typeof getCurrentWeeklyDinners>[DayOfWeek]): SupportingMeals {
+  const profile = mainMeal.nutrition;
 
   // Keep six eating occasions and adjust the rest of the day around dinner.
   // This is food-planning logic, not a calorie prescription.
@@ -170,16 +169,25 @@ export function getCurrentDefaultWeeklyMeals(): Record<string, DefaultMeal> {
   );
   const weeklyDinners = getCurrentWeeklyDinners();
   for (const day of DAYS) {
-    const dinner = weeklyDinners[day];
-    const supporting = balancedSupportingMeals(day, dinner);
+    // The rotating 100-meal option is the day's main meal and belongs at LUNCH.
+    // Dinner remains a lighter supporting meal so we never show both a generated
+    // lunch and a second rotating main meal on the same day.
+    const mainMeal = weeklyDinners[day];
+    const supporting = balancedSupportingMeals(day, mainMeal);
 
     for (const type of ['breakfast', 'morning_snack', 'lunch', 'afternoon_snack', 'night_snack'] as const) {
       const id = `${day}-${type.replace('_', '-')}`;
       result[id] = { ...result[id], foods: [...supporting[type]] };
     }
 
+    const lunchId = `${day}-lunch`;
+    result[lunchId] = { ...result[lunchId], name: mainMeal.name, foods: [...mainMeal.foods] };
+
     const dinnerId = `${day}-dinner`;
-    result[dinnerId] = { ...result[dinnerId], name: dinner.name, foods: [...dinner.foods] };
+    const lightDinner = mainMeal.nutrition.heaviness === 'heavy'
+      ? ['Pasteurized labneh or cheese', 'Whole-wheat pita', 'Well-washed cucumber and tomato']
+      : ['Lentil or vegetable soup', 'Whole-wheat pita', 'Pasteurized yogurt'];
+    result[dinnerId] = { ...result[dinnerId], name: 'Dinner', foods: lightDinner };
   }
   return result;
 }
