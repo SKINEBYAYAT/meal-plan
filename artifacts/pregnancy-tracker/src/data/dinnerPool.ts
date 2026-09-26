@@ -1,23 +1,35 @@
 import type { DayOfWeek } from '../types';
 import { MEAL_PLAN_KEY } from '../lib/storage';
 
+export type MealNutritionProfile = Readonly<{
+  protein: 'high' | 'moderate' | 'plant';
+  heaviness: 'light' | 'medium' | 'heavy';
+  ironRich: boolean;
+  hasVegetables: boolean;
+  carbBase: 'rice' | 'potato' | 'bread' | 'pasta' | 'bulgur' | 'mixed';
+  category: 'lebanese' | 'chicken' | 'beef' | 'pasta' | 'burger' | 'fajita' | 'wrap' | 'sausage' | 'vegetarian';
+}>;
+
 export type DinnerOption = Readonly<{
   id: string;
   name: string;
   foods: readonly string[];
+  nutrition: MealNutritionProfile;
 }>;
+
+type DinnerSeed = Omit<DinnerOption, 'nutrition'>;
 
 export const DINNER_ROTATION_STORAGE_KEY = 'pregnancy-dinner-rotation-v1';
 export const DINNER_REMINDER_SYNC_STORAGE_KEY = 'pregnancy-dinner-reminder-sync-v1';
 
-const POOL_VERSION = 1;
+const POOL_VERSION = 2;
 // One-time recovery for the stale week; never force a reset in later weeks.
 const STALE_WEEK_RECOVERY = '2026-09-14';
 const DINNER_DAYS: readonly DayOfWeek[] = [
   'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
 ];
 
-export const DINNER_POOL: readonly DinnerOption[] = [
+const DINNER_SEEDS: readonly DinnerSeed[] = [
   { id: 'chicken-tawook-rice', name: 'Chicken Tawook with Rice', foods: ['Fully cooked chicken tawook', 'Rice', 'Cooked vegetables', 'Pasteurized yogurt'] },
   { id: 'chicken-potato-tray', name: 'Lebanese Chicken and Potato Tray', foods: ['Fully cooked chicken', 'Roasted potatoes', 'Garlic and lemon', 'Well-washed Lebanese salad'] },
   { id: 'molokhia-chicken', name: 'Molokhia with Chicken', foods: ['Molokhia', 'Fully cooked chicken', 'Rice', 'Lemon'] },
@@ -68,7 +80,95 @@ export const DINNER_POOL: readonly DinnerOption[] = [
   { id: 'spinach-rice-chickpeas', name: 'Spinach Rice with Chickpeas', foods: ['Cooked spinach', 'Rice', 'Chickpeas', 'Pasteurized yogurt'] },
   { id: 'vegetable-stew-rice', name: 'Lebanese Vegetable Stew with Rice', foods: ['Zucchini and potatoes', 'Carrots and peas', 'Tomato sauce', 'Rice'] },
   { id: 'roasted-vegetable-hummus', name: 'Roasted Vegetable Hummus Plate', foods: ['Hummus', 'Roasted seasonal vegetables', 'Whole-wheat pita', 'Pasteurized labneh'] },
+  { id: 'spaghetti-bolognese', name: 'Spaghetti Bolognese', foods: ['Whole-wheat spaghetti', 'Fully cooked lean beef', 'Tomato sauce', 'Cooked carrots and peppers'] },
+  { id: 'penne-chicken-tomato', name: 'Chicken Penne in Tomato Sauce', foods: ['Penne pasta', 'Fully cooked chicken', 'Tomato sauce', 'Cooked zucchini'] },
+  { id: 'chicken-creamy-pasta', name: 'Creamy Chicken Pasta', foods: ['Pasta', 'Fully cooked chicken', 'Pasteurized light cream', 'Cooked mushrooms and spinach'] },
+  { id: 'beef-lasagna', name: 'Beef Lasagna', foods: ['Fully cooked lean beef', 'Pasta sheets', 'Tomato sauce', 'Pasteurized cheese', 'Well-washed salad'] },
+  { id: 'chicken-lasagna', name: 'Chicken and Spinach Lasagna', foods: ['Fully cooked chicken', 'Pasta sheets', 'Cooked spinach', 'Pasteurized cheese'] },
+  { id: 'beef-macaroni', name: 'Beef Macaroni with Tomato', foods: ['Macaroni', 'Fully cooked lean beef', 'Tomato sauce', 'Cooked vegetables'] },
+  { id: 'chicken-pesto-pasta', name: 'Chicken Pesto Pasta', foods: ['Pasta', 'Fully cooked chicken', 'Pasteurized pesto ingredients', 'Cooked broccoli'] },
+  { id: 'tuna-pasta', name: 'Tuna and Tomato Pasta', foods: ['Pasta', 'Canned light tuna', 'Tomato sauce', 'Cooked vegetables'] },
+  { id: 'lentil-bolognese', name: 'Lentil Bolognese Pasta', foods: ['Whole-wheat pasta', 'Lentils', 'Tomato sauce', 'Cooked carrots and zucchini'] },
+  { id: 'chicken-mushroom-pasta', name: 'Chicken Mushroom Pasta', foods: ['Pasta', 'Fully cooked chicken', 'Cooked mushrooms', 'Pasteurized yogurt-based sauce'] },
+  { id: 'homemade-beef-burger', name: 'Homemade Beef Burger', foods: ['Fully cooked lean beef patty', 'Whole-wheat bun', 'Pasteurized cheese', 'Well-washed lettuce and tomato', 'Baked potato wedges'] },
+  { id: 'homemade-chicken-burger', name: 'Homemade Chicken Burger', foods: ['Fully cooked chicken patty', 'Whole-wheat bun', 'Pasteurized cheese', 'Well-washed lettuce and tomato', 'Baked potatoes'] },
+  { id: 'beef-burger-avocado', name: 'Beef Burger with Avocado', foods: ['Fully cooked lean beef patty', 'Whole-wheat bun', 'Avocado', 'Well-washed tomato', 'Baked sweet potato'] },
+  { id: 'chicken-burger-yogurt', name: 'Chicken Burger with Yogurt Slaw', foods: ['Fully cooked chicken patty', 'Whole-wheat bun', 'Pasteurized yogurt slaw', 'Baked potato wedges'] },
+  { id: 'mini-kafta-burgers', name: 'Lebanese Kafta Burgers', foods: ['Fully cooked beef kafta patties', 'Whole-wheat buns', 'Hummus', 'Well-washed tomato and parsley', 'Baked potatoes'] },
+  { id: 'chicken-fajitas', name: 'Chicken Fajitas', foods: ['Fully cooked chicken strips', 'Cooked peppers and onions', 'Whole-wheat tortillas', 'Avocado', 'Pasteurized yogurt'] },
+  { id: 'beef-fajitas', name: 'Beef Fajitas', foods: ['Fully cooked beef strips', 'Cooked peppers and onions', 'Whole-wheat tortillas', 'Tomato salsa'] },
+  { id: 'chicken-fajita-rice', name: 'Chicken Fajita Rice Bowl', foods: ['Fully cooked chicken', 'Rice', 'Cooked peppers and onions', 'Corn', 'Avocado'] },
+  { id: 'beef-fajita-rice', name: 'Beef Fajita Rice Bowl', foods: ['Fully cooked beef', 'Rice', 'Cooked peppers and onions', 'Beans', 'Tomato'] },
+  { id: 'bean-fajitas', name: 'Bean and Cheese Fajitas', foods: ['Black or kidney beans', 'Cooked peppers and onions', 'Whole-wheat tortillas', 'Pasteurized cheese', 'Avocado'] },
+  { id: 'makanek-potatoes', name: 'Makanek with Potatoes and Vegetables', foods: ['Fully cooked makanek sausage', 'Baked potatoes', 'Cooked peppers and zucchini', 'Lemon'] },
+  { id: 'makanek-rice', name: 'Makanek Rice Bowl', foods: ['Fully cooked makanek sausage', 'Rice', 'Cooked peas and carrots', 'Pasteurized yogurt'] },
+  { id: 'soujouk-vegetables', name: 'Soujouk with Roasted Vegetables', foods: ['Fully cooked soujouk', 'Roasted peppers and zucchini', 'Baked potatoes', 'Pasteurized yogurt'] },
+  { id: 'soujouk-eggs', name: 'Soujouk and Eggs Plate', foods: ['Fully cooked soujouk', 'Fully cooked eggs', 'Whole-wheat pita', 'Well-washed tomato and cucumber'] },
+  { id: 'makanek-tomato', name: 'Makanek in Tomato Sauce', foods: ['Fully cooked makanek sausage', 'Tomato sauce', 'Cooked peppers', 'Rice'] },
+  { id: 'chicken-shawarma-wrap', name: 'Chicken Shawarma Wrap', foods: ['Fully cooked chicken shawarma', 'Whole-wheat wrap', 'Hummus', 'Well-washed lettuce and tomato', 'Baked potatoes'] },
+  { id: 'beef-shawarma-wrap', name: 'Beef Shawarma Wrap', foods: ['Fully cooked beef shawarma', 'Whole-wheat wrap', 'Tahini', 'Well-washed tomato and parsley'] },
+  { id: 'tawook-wrap', name: 'Chicken Tawook Wrap', foods: ['Fully cooked chicken tawook', 'Whole-wheat wrap', 'Hummus', 'Well-washed vegetables'] },
+  { id: 'kafta-wrap', name: 'Kafta Wrap', foods: ['Fully cooked beef kafta', 'Whole-wheat wrap', 'Pasteurized yogurt sauce', 'Well-washed tomato and parsley'] },
+  { id: 'chicken-avocado-wrap', name: 'Chicken Avocado Wrap', foods: ['Fully cooked chicken', 'Whole-wheat wrap', 'Avocado', 'Well-washed lettuce and tomato'] },
+  { id: 'chicken-burrito-bowl', name: 'Chicken Burrito Bowl', foods: ['Fully cooked chicken', 'Rice', 'Beans', 'Corn', 'Avocado', 'Tomato'] },
+  { id: 'beef-burrito-bowl', name: 'Beef Burrito Bowl', foods: ['Fully cooked lean beef', 'Rice', 'Beans', 'Cooked peppers', 'Tomato'] },
+  { id: 'chicken-quesadilla', name: 'Chicken and Cheese Quesadilla', foods: ['Fully cooked chicken', 'Whole-wheat tortilla', 'Pasteurized cheese', 'Cooked peppers', 'Tomato salsa'] },
+  { id: 'beef-quesadilla', name: 'Beef and Vegetable Quesadilla', foods: ['Fully cooked beef', 'Whole-wheat tortilla', 'Pasteurized cheese', 'Cooked peppers and onions'] },
+  { id: 'bean-quesadilla', name: 'Bean and Cheese Quesadilla', foods: ['Beans', 'Whole-wheat tortilla', 'Pasteurized cheese', 'Cooked peppers', 'Avocado'] },
+  { id: 'chicken-stir-fry-rice', name: 'Chicken Vegetable Stir-Fry with Rice', foods: ['Fully cooked chicken', 'Rice', 'Cooked broccoli', 'Carrots and peppers'] },
+  { id: 'beef-stir-fry-rice', name: 'Beef Vegetable Stir-Fry with Rice', foods: ['Fully cooked beef', 'Rice', 'Cooked broccoli', 'Carrots and peppers'] },
+  { id: 'chicken-sweet-potato', name: 'Chicken with Sweet Potato and Spinach', foods: ['Fully cooked chicken', 'Baked sweet potato', 'Cooked spinach', 'Pasteurized yogurt'] },
+  { id: 'beef-sweet-potato', name: 'Beef with Sweet Potato and Vegetables', foods: ['Fully cooked lean beef', 'Baked sweet potato', 'Cooked zucchini and carrots'] },
+  { id: 'chicken-rice-beans', name: 'Chicken Rice and Beans', foods: ['Fully cooked chicken', 'Rice', 'Beans', 'Cooked tomato and peppers'] },
+  { id: 'beef-kofta-bulgur', name: 'Beef Kofta with Bulgur', foods: ['Fully cooked beef kofta', 'Bulgur', 'Cooked vegetables', 'Pasteurized yogurt'] },
+  { id: 'chicken-kofta-bulgur', name: 'Chicken Kofta with Bulgur', foods: ['Fully cooked chicken kofta', 'Bulgur', 'Cooked vegetables', 'Pasteurized yogurt'] },
+  { id: 'baked-chicken-parmesan', name: 'Baked Chicken Parmesan', foods: ['Fully cooked baked chicken', 'Tomato sauce', 'Pasteurized cheese', 'Pasta', 'Cooked vegetables'] },
+  { id: 'beef-meatball-pasta', name: 'Beef Meatball Pasta', foods: ['Fully cooked beef meatballs', 'Pasta', 'Tomato sauce', 'Cooked zucchini'] },
+  { id: 'chicken-meatball-rice', name: 'Chicken Meatballs with Rice', foods: ['Fully cooked chicken meatballs', 'Rice', 'Tomato sauce', 'Cooked peas and carrots'] },
+  { id: 'turkey-meatball-pasta', name: 'Turkey Meatball Pasta', foods: ['Fully cooked turkey meatballs', 'Whole-wheat pasta', 'Tomato sauce', 'Cooked vegetables'] },
+  { id: 'chickpea-pasta-bowl', name: 'Chickpea Pasta Bowl', foods: ['Whole-wheat pasta', 'Chickpeas', 'Tomato', 'Cooked spinach', 'Pasteurized cheese'] },
+  { id: 'white-bean-pasta', name: 'White Bean Tomato Pasta', foods: ['Pasta', 'White beans', 'Tomato sauce', 'Cooked spinach'] },
+  { id: 'chicken-flatbread', name: 'Chicken Vegetable Flatbread', foods: ['Whole-wheat flatbread', 'Fully cooked chicken', 'Pasteurized cheese', 'Cooked peppers and mushrooms'] },
+  { id: 'beef-flatbread', name: 'Beef and Vegetable Flatbread', foods: ['Whole-wheat flatbread', 'Fully cooked lean beef', 'Pasteurized cheese', 'Cooked peppers and tomato'] },
+
 ];
+
+
+function profileDinner(seed: DinnerSeed): MealNutritionProfile {
+  const text = `${seed.name} ${seed.foods.join(' ')}`.toLowerCase();
+  const beef = /beef|kafta|kofta|meatball|shawarma|kibbeh|makanek|soujouk/.test(text);
+  const chicken = /chicken|turkey/.test(text);
+  const plant = !beef && !chicken && !/tuna/.test(text);
+  const category: MealNutritionProfile['category'] =
+    /pasta|spaghetti|penne|lasagna|macaroni/.test(text) ? 'pasta' :
+    /burger/.test(text) ? 'burger' :
+    /fajita/.test(text) ? 'fajita' :
+    /wrap|quesadilla|flatbread/.test(text) ? 'wrap' :
+    /makanek|soujouk|sausage/.test(text) ? 'sausage' :
+    chicken ? 'chicken' : beef ? 'beef' : plant ? 'vegetarian' : 'lebanese';
+  const carbBase: MealNutritionProfile['carbBase'] =
+    /pasta|spaghetti|penne|lasagna|macaroni/.test(text) ? 'pasta' :
+    /rice/.test(text) ? 'rice' :
+    /potato/.test(text) ? 'potato' :
+    /pita|bread|bun|tortilla|wrap|flatbread/.test(text) ? 'bread' :
+    /bulgur|freekeh|moghrabieh/.test(text) ? 'bulgur' : 'mixed';
+  const heaviness: MealNutritionProfile['heaviness'] =
+    /burger|lasagna|creamy|makanek|soujouk|fatteh|kibbeh labanieh|shish barak/.test(text) ? 'heavy' :
+    /soup|salad|vegetable stew|roasted vegetable/.test(text) ? 'light' : 'medium';
+  return {
+    protein: plant ? 'plant' : 'high',
+    heaviness,
+    ironRich: beef || /lentil|bean|chickpea|spinach/.test(text),
+    hasVegetables: /vegetable|tomato|pepper|spinach|zucchini|carrot|salad|lettuce|broccoli|okra|green bean|eggplant|cabbage|pea/.test(text),
+    carbBase,
+    category,
+  };
+}
+
+export const DINNER_POOL: readonly DinnerOption[] = DINNER_SEEDS.map((seed) => ({
+  ...seed,
+  nutrition: profileDinner(seed),
+}));
 
 type DinnerRotationState = {
   version: number;
@@ -223,6 +323,6 @@ export function getCurrentDinnerRotationSignature(now = new Date()): string {
   return `${weekKey}:${dinnerIds.join(',')}`;
 }
 
-if (DINNER_POOL.length !== 50 || dinnerById.size !== DINNER_POOL.length) {
-  throw new Error('Dinner pool must contain exactly 50 uniquely identified meals.');
+if (DINNER_POOL.length !== 100 || dinnerById.size !== DINNER_POOL.length) {
+  throw new Error('Dinner pool must contain exactly 100 uniquely identified meals.');
 }
