@@ -22,7 +22,7 @@ type DinnerSeed = Omit<DinnerOption, 'nutrition'>;
 export const DINNER_ROTATION_STORAGE_KEY = 'pregnancy-dinner-rotation-v1';
 export const DINNER_REMINDER_SYNC_STORAGE_KEY = 'pregnancy-dinner-reminder-sync-v1';
 
-const POOL_VERSION = 2;
+const POOL_VERSION = 3;
 // One-time recovery for the stale week; never force a reset in later weeks.
 const STALE_WEEK_RECOVERY = '2026-09-14';
 const DINNER_DAYS: readonly DayOfWeek[] = [
@@ -256,15 +256,55 @@ function drawWeek(queue: string[], previousWeekIds: readonly string[] = []): { s
   let remaining = [...queue];
   const allIds = DINNER_POOL.map((dinner) => dinner.id);
   const previousWeek = new Set(previousWeekIds);
+  const categoryCounts = new Map<MealNutritionProfile['category'], number>();
+  const carbCounts = new Map<MealNutritionProfile['carbBase'], number>();
+
+  const scoreCandidate = (id: string, index: number): number => {
+    const dinner = dinnerById.get(id)!;
+    const categoryCount = categoryCounts.get(dinner.nutrition.category) ?? 0;
+    const carbCount = carbCounts.get(dinner.nutrition.carbBase) ?? 0;
+    const previous = previousWeek.has(id) ? 1000 : 0;
+    const duplicate = selected.includes(id) ? 1000 : 0;
+    const adjacentCategory = selected.length > 0
+      && dinnerById.get(selected[selected.length - 1])?.nutrition.category === dinner.nutrition.category ? 20 : 0;
+    const heavyPenalty = dinner.nutrition.heaviness === 'heavy'
+      && selected.some((selectedId) => dinnerById.get(selectedId)?.nutrition.heaviness === 'heavy') ? 8 : 0;
+    // Prefer the existing shuffled queue, but strongly favor weekly variety.
+    return previous + duplicate + (categoryCount * 12) + (carbCount * 4)
+      + adjacentCategory + heavyPenalty + (index / Math.max(remaining.length, 1));
+  };
 
   while (selected.length < DINNER_DAYS.length) {
-    if (remaining.length === 0) remaining = shuffle(allIds);
-    let nextIndex = remaining.findIndex((id) => !selected.includes(id) && !previousWeek.has(id));
-    if (nextIndex < 0) {
-      nextIndex = remaining.findIndex((id) => !selected.includes(id));
+    if (remaining.length === 0) {
+      // Start a new 100-meal cycle only after the current queue is exhausted.
+      // Put the just-used/previous meals at the back so cycle boundaries do not
+      // immediately repeat last week's dinners.
+      remaining = shuffle(allIds.filter((id) => !previousWeek.has(id) && !selected.includes(id)))
+        .concat(shuffle(allIds.filter((id) => previousWeek.has(id) || selected.includes(id))));
     }
-    const [nextId] = remaining.splice(nextIndex, 1);
+
+    let bestIndex = -1;
+    let bestScore = Number.POSITIVE_INFINITY;
+    for (let index = 0; index < remaining.length; index += 1) {
+      const score = scoreCandidate(remaining[index], index);
+      if (score < bestScore) {
+        bestScore = score;
+        bestIndex = index;
+      }
+    }
+
+    // The queue can contain only excluded IDs at a cycle boundary; rebuild once
+    // rather than allowing an accidental duplicate inside the same week.
+    if (bestIndex < 0 || selected.includes(remaining[bestIndex])) {
+      remaining = shuffle(allIds.filter((id) => !selected.includes(id)));
+      continue;
+    }
+
+    const [nextId] = remaining.splice(bestIndex, 1);
     selected.push(nextId);
+    const nutrition = dinnerById.get(nextId)!.nutrition;
+    categoryCounts.set(nutrition.category, (categoryCounts.get(nutrition.category) ?? 0) + 1);
+    carbCounts.set(nutrition.carbBase, (carbCounts.get(nutrition.carbBase) ?? 0) + 1);
   }
 
   return { selected, remaining };
